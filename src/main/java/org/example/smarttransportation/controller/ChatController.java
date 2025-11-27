@@ -125,7 +125,7 @@ public class ChatController {
                 
                 我会基于实时数据为您提供专业的分析和建议！
                 """;
-
+            // test
             ChatResponse response = ChatResponse.success("intro", introMessage);
             return ResponseEntity.ok(response);
 
