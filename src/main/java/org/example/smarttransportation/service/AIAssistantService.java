@@ -53,12 +53,14 @@ public class AIAssistantService {
                     2. 基于实时数据提供交通风险预警和建议
                     3. 回答关于交通事故、天气影响、许可事件和地铁客流的问题
                     4. 提供专业的交通管理建议和决策支持
+                    5. 利用互联网搜索获取最新的交通新闻、政策和实时路况
                     
                     你可以访问以下数据：
                     - 交通事故数据 (nyc_traffic_accidents)
                     - 天气数据 (nyc_weather_data) 
                     - 许可事件数据 (nyc_permitted_events)
                     - 地铁客流数据 (subway_ridership)
+                    - 互联网实时信息 (通过 webSearch 工具)
                     
                     请用专业但友好的语调回答，并在适当时候主动提供相关的数据洞察。
                     如果用户的问题涉及数据查询，请在回答中明确说明你查询了哪些数据源。
@@ -101,6 +103,15 @@ public class AIAssistantService {
 
             // 构建对话上下文
             ChatClient.ChatClientRequestSpec requestSpec = chatClient.prompt();
+
+            // 如果启用了深度搜索，添加webSearch工具
+            if (Boolean.TRUE.equals(request.getEnableSearch())) {
+                logger.info("启用深度搜索 (Deep Research) - 挂载 webSearch 工具");
+                requestSpec.functions("webSearch");
+                
+                // 强制提示 AI 使用搜索工具
+                enhancedMessage += "\n\n【系统提示】用户已开启深度搜索模式。请务必使用 'webSearch' 工具搜索互联网上的最新信息来补充你的回答，特别是当本地数据不足或过时的时候。不要仅依赖训练数据。";
+            }
 
             // 添加历史上下文
             if (request.getIncludeContext() != null && request.getIncludeContext()) {

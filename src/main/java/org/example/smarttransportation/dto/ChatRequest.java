@@ -28,6 +28,11 @@ public class ChatRequest {
      */
     private Integer maxContextRounds = 5;
 
+    /**
+     * 是否启用深度搜索
+     */
+    private Boolean enableSearch = false;
+
     public ChatRequest() {}
 
     public ChatRequest(String sessionId, String message) {
@@ -66,5 +71,13 @@ public class ChatRequest {
 
     public void setMaxContextRounds(Integer maxContextRounds) {
         this.maxContextRounds = maxContextRounds;
+    }
+
+    public Boolean getEnableSearch() {
+        return enableSearch;
+    }
+
+    public void setEnableSearch(Boolean enableSearch) {
+        this.enableSearch = enableSearch;
     }
 }

@@ -8,13 +8,13 @@ spring:
     allow-bean-definition-overriding: true
   ai:
     dashscope:
-      api-key: {$API_KEY}
+      api-key: sk-ef988a59f27e45f4b88f0c7847a5ae7c
 
   # MySQL 数据库配置
   datasource:
     url: jdbc:mysql://localhost:3306/smart_transportation?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-    username: {$USERNAME}
-    password: {$PASSWORD}
+    username: root
+    password: root
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   # JPA 配置
@@ -55,3 +55,6 @@ milvus:
     keep-alive-timeout: 20000
     max-idle-timeout: 60000
     retry-times: 3
+
+tavily:
+  api-key: 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

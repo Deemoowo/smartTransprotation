@@ -46,8 +46,8 @@ public class ChatController {
                 request.setSessionId(UUID.randomUUID().toString());
             }
 
-            logger.info("收到对话请求 - 会话ID: {}, 消息: {}", 
-                request.getSessionId(), request.getMessage());
+            logger.info("收到对话请求 - 会话ID: {}, 消息: {}, 深度搜索: {}", 
+                request.getSessionId(), request.getMessage(), request.getEnableSearch());
 
             // 调用AI助手服务
             ChatResponse response = aiAssistantService.chat(request);
