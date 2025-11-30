@@ -52,6 +52,11 @@ public class ChatResponse {
     private String error;
 
     /**
+     * 图表数据（用于前端展示）
+     */
+    private List<ChartData> charts;
+
+    /**
      * 是否成功
      */
     private Boolean success = true;
@@ -141,6 +146,14 @@ public class ChatResponse {
 
     public void setError(String error) {
         this.error = error;
+    }
+
+    public List<ChartData> getCharts() {
+        return charts;
+    }
+
+    public void setCharts(List<ChartData> charts) {
+        this.charts = charts;
     }
 
     public Boolean getSuccess() {

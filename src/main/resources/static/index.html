@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>T-Agent 智慧交通AI助手</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * {
             margin: 0;
@@ -150,6 +151,101 @@
             margin-top: 8px;
             padding-top: 8px;
             border-top: 1px solid #e9ecef;
+        }
+
+        .chart-wrapper {
+            margin-top: 12px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+        }
+
+        .chart-card {
+            background: #f5f7ff;
+            border: 1px solid #e0e7ff;
+            border-radius: 12px;
+            padding: 10px;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+            min-width: 200px;
+        }
+
+        .chart-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 8px;
+        }
+
+        .chart-card canvas {
+            width: 100%;
+            height: 120px;
+        }
+
+        .chart-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 6px;
+        }
+
+        .chart-btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #fff;
+            border: none;
+            padding: 6px 10px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+        }
+
+        .chart-btn:hover {
+            opacity: 0.9;
+        }
+
+        .chart-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.45);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            padding: 16px;
+        }
+
+        .chart-modal-content {
+            background: #fff;
+            border-radius: 12px;
+            max-width: 900px;
+            width: 100%;
+            padding: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+            overflow: auto;
+        }
+
+        .chart-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .chart-modal-title {
+            font-weight: 700;
+            font-size: 1rem;
+            color: #111827;
+        }
+
+        .chart-modal-close {
+            border: none;
+            background: transparent;
+            font-size: 1.2rem;
+            cursor: pointer;
+        }
+
+        .chart-modal canvas {
+            width: 720px;
+            height: 320px;
         }
 
         .data-query-indicator {
@@ -391,10 +487,11 @@
         let isLoading = false;
 
         // 初始化
-        document.addEventListener('DOMContentLoaded', async function() {
-            await initializeSession();
-            await loadIntroduction();
-        });
+    document.addEventListener('DOMContentLoaded', async function() {
+        await initializeSession();
+        await loadIntroduction();
+        ensureChartModal();
+    });
 
         // 初始化会话
         async function initializeSession() {
@@ -474,7 +571,8 @@
                         involvesDataQuery: data.involvesDataQuery,
                         queriedTables: data.queriedTables,
                         processingTime: data.processingTimeMs,
-                        dataQuerySummary: data.dataQuerySummary
+                        dataQuerySummary: data.dataQuerySummary,
+                        charts: data.charts || []
                     });
                 } else {
                     addMessage('assistant', `抱歉，处理您的请求时出现了问题：${data.message}`, new Date(), {
@@ -540,6 +638,41 @@
                 </div>
             `;
 
+            if (type === 'assistant' && meta.charts && meta.charts.length) {
+                const bodyContainer = messageDiv.children[1];
+                const chartsContainer = document.createElement('div');
+                chartsContainer.className = 'chart-wrapper';
+
+                meta.charts.forEach((chart, index) => {
+                    const card = document.createElement('div');
+                    card.className = 'chart-card';
+
+                    const title = document.createElement('div');
+                    title.className = 'chart-title';
+                    title.textContent = chart.title || `图表 ${index + 1}`;
+
+                    const canvas = document.createElement('canvas');
+                    card.appendChild(title);
+                    card.appendChild(canvas);
+
+                    const actions = document.createElement('div');
+                    actions.className = 'chart-actions';
+                    const btn = document.createElement('button');
+                    btn.className = 'chart-btn';
+                    btn.textContent = '查看全图';
+                    btn.onclick = () => openChartModal(chart);
+                    actions.appendChild(btn);
+                    card.appendChild(actions);
+
+                    chartsContainer.appendChild(card);
+
+                    // 延迟到下一帧渲染，避免容器未挂载
+                    setTimeout(() => renderChart(canvas, chart, false), 0);
+                });
+
+                bodyContainer.appendChild(chartsContainer);
+            }
+
             messagesContainer.appendChild(messageDiv);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
@@ -548,6 +681,105 @@
         function formatMessage(content) {
             // 将换行符转换为HTML换行
             return content.replace(/\n/g, '<br>');
+        }
+
+        function renderChart(canvas, chart, isModal = false) {
+            if (!window.Chart) return;
+
+            const palette = ['#4F46E5', '#22C55E', '#0EA5E9', '#F97316', '#EC4899', '#14B8A6'];
+            const datasets = (chart.series || []).map((series, index) => {
+                const color = palette[index % palette.length];
+                const isBar = (chart.type || 'line') === 'bar';
+                return {
+                    label: series.name || `Series ${index + 1}`,
+                    data: series.data || [],
+                    borderColor: color,
+                    backgroundColor: isBar ? color + '55' : color,
+                    fill: !isBar,
+                    tension: 0.25
+                };
+            });
+
+            // 缩略图用固定尺寸，避免反复自适应导致抖动
+            if (!isModal) {
+                canvas.width = canvas.parentElement ? canvas.parentElement.clientWidth : 260;
+                canvas.height = 120;
+            } else {
+                // 模态大图固定尺寸
+                canvas.width = 720;
+                canvas.height = 320;
+            }
+
+            return new Chart(canvas.getContext('2d'), {
+                type: chart.type || 'line',
+                data: {
+                    labels: chart.labels || [],
+                    datasets: datasets
+                },
+                options: {
+                    responsive: false,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(0,0,0,0.05)' }
+                        },
+                        x: {
+                            grid: { display: false }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: true, labels: { boxWidth: 12 } },
+                        tooltip: { mode: 'index', intersect: false }
+                    }
+                }
+            });
+        }
+
+        // 模态框渲染全图
+        let modalChartInstance = null;
+        function ensureChartModal() {
+            if (document.getElementById('chartModal')) return;
+            const modal = document.createElement('div');
+            modal.id = 'chartModal';
+            modal.className = 'chart-modal';
+            modal.innerHTML = `
+                <div class="chart-modal-content">
+                    <div class="chart-modal-header">
+                        <div class="chart-modal-title" id="chartModalTitle">图表</div>
+                        <button class="chart-modal-close" onclick="closeChartModal()">×</button>
+                    </div>
+                    <canvas id="chartModalCanvas"></canvas>
+                </div>
+            `;
+            modal.onclick = (e) => {
+                if (e.target.id === 'chartModal') {
+                    closeChartModal();
+                }
+            };
+            document.body.appendChild(modal);
+        }
+
+        function openChartModal(chart) {
+            const modal = document.getElementById('chartModal');
+            if (!modal) return;
+            modal.style.display = 'flex';
+            document.getElementById('chartModalTitle').textContent = chart.title || '图表';
+            const ctx = document.getElementById('chartModalCanvas').getContext('2d');
+            if (modalChartInstance) {
+                modalChartInstance.destroy();
+            }
+            modalChartInstance = renderChart(ctx.canvas, chart, true);
+        }
+
+        function closeChartModal() {
+            const modal = document.getElementById('chartModal');
+            if (modal) modal.style.display = 'none';
+            if (modalChartInstance) {
+                modalChartInstance.destroy();
+                modalChartInstance = null;
+            }
         }
 
         // 显示输入状态

@@ -1,8 +1,10 @@
 package org.example.smarttransportation.service;
 
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
+import org.example.smarttransportation.dto.ChartData;
 import org.example.smarttransportation.dto.ChatRequest;
 import org.example.smarttransportation.dto.ChatResponse;
+import org.example.smarttransportation.dto.WeatherAnswer;
 import org.example.smarttransportation.entity.ChatHistory;
 import org.example.smarttransportation.repository.ChatHistoryRepository;
 import org.slf4j.Logger;
@@ -43,6 +45,9 @@ public class AIAssistantService {
     @Autowired
     private RAGService ragService;
 
+    @Autowired
+    private WeatherApiService weatherApiService;
+
     public AIAssistantService(ChatModel chatModel) {
         // 构建ChatClient，设置专门的交通助手参数
         this.chatClient = ChatClient.builder(chatModel)
@@ -62,7 +67,7 @@ public class AIAssistantService {
                     
                     你可以访问以下数据：
                     - 交通事故数据 (nyc_traffic_accidents)
-                    - 天气数据 (nyc_weather_data) 
+                    - 天气数据（通过外部天气 API）
                     - 许可事件数据 (nyc_permitted_events)
                     - 地铁客流数据 (subway_ridership)
                     
@@ -305,6 +310,8 @@ public class AIAssistantService {
             boolean needsDataQuery = isDataQueryRequired(request.getMessage());
             String enhancedMessage = request.getMessage();
             List<String> queriedTables = new ArrayList<>();
+            List<ChartData> charts = new ArrayList<>();
+            boolean wantsCharts = wantsCharts(request.getMessage());
 
             if (needsDataQuery) {
                 // 调用数据分析服务
@@ -318,6 +325,17 @@ public class AIAssistantService {
                     logger.warn("数据查询失败: {}", e.getMessage());
                     enhancedMessage = request.getMessage() + "\n\n注意：当前无法访问实时数据，回答基于一般知识。";
                 }
+            }
+
+            // 判断是否命中曼哈顿 2024 年 2 月天气查询，注入接口/样例数据
+            WeatherAnswer weatherAnswer = weatherApiService.findWeatherAnswerForMessage(request.getMessage());
+            if (weatherAnswer != null) {
+                needsDataQuery = true;
+                queriedTables.add("weather_api_manhattan_2024_02");
+                if (wantsCharts && weatherAnswer.getCharts() != null) {
+                    charts.addAll(weatherAnswer.getCharts());
+                }
+                enhancedMessage = enhancedMessage + "\n\n【天气数据支持】\n" + weatherAnswer.getSummary();
             }
 
             // 构建对话上下文
@@ -354,14 +372,28 @@ public class AIAssistantService {
             // 保存对话历史
             saveChatHistory(sessionId, request.getMessage(), assistantReply, needsDataQuery, queriedTables);
 
+            if (!charts.isEmpty()) {
+                logger.info("返回图表数量: {}, 标题: {}", charts.size(),
+                        charts.stream().map(ChartData::getTitle).toList());
+            } else {
+                logger.info("本次响应未包含图表");
+            }
+
             // 构建响应
             ChatResponse response = ChatResponse.success(sessionId, assistantReply);
             response.setInvolvesDataQuery(needsDataQuery);
             response.setQueriedTables(queriedTables);
+            response.setCharts(charts);
             response.setProcessingTimeMs(System.currentTimeMillis() - startTime);
 
             if (needsDataQuery && !queriedTables.isEmpty()) {
-                response.setDataQuerySummary("已查询交通相关数据并整合到回答中");
+                String summary = "已查询交通相关数据并整合到回答中";
+                if (weatherAnswer != null) {
+                    summary = wantsCharts
+                        ? "已接入天气数据并生成图表"
+                        : "已接入天气数据（未请求图表）";
+                }
+                response.setDataQuerySummary(summary);
             }
 
             return response;
@@ -385,7 +417,7 @@ public class AIAssistantService {
 
         // 关键词匹配
         String[] dataKeywords = {
-            "事故", "accident", "天气", "weather", "地铁", "subway",
+            "事故", "accident", "地铁", "subway",
             "客流", "ridership", "许可", "permit", "事件", "event",
             "数据", "data", "统计", "statistics", "分析", "analysis",
             "查询", "query", "多少", "how many", "什么时候", "when",
@@ -411,9 +443,6 @@ public class AIAssistantService {
         if (message.contains("事故") || message.contains("accident")) {
             tables.add("nyc_traffic_accidents");
         }
-        if (message.contains("天气") || message.contains("weather")) {
-            tables.add("nyc_weather_data");
-        }
         if (message.contains("地铁") || message.contains("subway") || message.contains("客流")) {
             tables.add("subway_ridership");
         }
@@ -422,6 +451,15 @@ public class AIAssistantService {
         }
 
         return tables;
+    }
+
+    /**
+     * 判断用户是否请求可视化图表
+     */
+    private boolean wantsCharts(String userMessage) {
+        String msg = userMessage.toLowerCase();
+        return msg.contains("图") || msg.contains("chart") || msg.contains("图表")
+                || msg.contains("趋势") || msg.contains("可视化");
     }
 
     /**
