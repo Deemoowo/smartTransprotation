@@ -368,6 +368,56 @@
             cursor: not-allowed;
         }
 
+        .send-button.stop {
+            background: linear-gradient(135deg, #764ba2, #5a3a7a);
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        .send-button.stop:hover:not(:disabled) {
+            box-shadow: 0 4px 15px rgba(118, 75, 162, 0.6);
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.7;
+            }
+        }
+
+        .message-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .message:hover .message-actions {
+            opacity: 1;
+        }
+
+        .message-action-btn {
+            background: #f3f4f6;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: #6b7280;
+        }
+
+        .message-action-btn:hover {
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        .message-action-btn:active {
+            transform: scale(0.95);
+        }
+
         .quick-questions {
             display: flex;
             gap: 10px;
@@ -533,7 +583,7 @@
                         onkeydown="handleKeyDown(event)"
                         oninput="autoResize(this)">
                     </textarea>
-                    <button class="send-button" id="sendButton" onclick="sendMessage()">
+                    <button class="send-button" id="sendButton" onclick="sendMessage()" title="发送消息 (Enter)"></button>
                         ➤
                     </button>
                 </div>
@@ -545,6 +595,7 @@
         let currentSessionId = null;
         let isLoading = false;
         let isDeepResearchEnabled = false;
+        let currentAbortController = null;
 
         function toggleDeepResearch() {
             const btn = document.getElementById('deepResearchBtn');
@@ -554,6 +605,19 @@
                 btn.classList.add('active');
             } else {
                 btn.classList.remove('active');
+            }
+        }
+
+        // 停止当前生成
+        function stopGeneration() {
+            if (currentAbortController) {
+                currentAbortController.abort();
+                currentAbortController = null;
+                hideTyping();
+                addMessage('assistant', '已停止生成回答。', new Date(), {
+                    involvesDataQuery: false,
+                    processingTime: 0
+                });
             }
         }
 
@@ -607,19 +671,24 @@
         }
 
         // 发送消息
-        async function sendMessage() {
+        async function sendMessage(messageText = null) {
             const input = document.getElementById('chatInput');
-            const message = input.value.trim();
+            const message = messageText || input.value.trim();
 
             if (!message || isLoading) return;
 
             // 添加用户消息
             addMessage('user', message, new Date());
-            input.value = '';
-            autoResize(input);
+            if (!messageText) {
+                input.value = '';
+                autoResize(input);
+            }
 
             // 显示加载状态
             showTyping();
+
+            // 创建新的 AbortController 用于取消请求
+            currentAbortController = new AbortController();
 
             try {
                 const response = await fetch('/api/chat/message', {
@@ -633,7 +702,8 @@
                         enableSearch: isDeepResearchEnabled,
                         includeContext: true,
                         maxContextRounds: 3
-                    })
+                    }),
+                    signal: currentAbortController.signal
                 });
 
                 const data = await response.json();
@@ -653,12 +723,17 @@
                     });
                 }
             } catch (error) {
-                console.error('发送消息失败:', error);
-                addMessage('assistant', '抱歉，网络连接出现问题，请稍后重试。', new Date(), {
-                    involvesDataQuery: false,
-                    processingTime: 0
-                });
+                if (error.name === 'AbortError') {
+                    console.log('请求已被用户取消');
+                } else {
+                    console.error('发送消息失败:', error);
+                    addMessage('assistant', '抱歉，网络连接出现问题，请稍后重试。', new Date(), {
+                        involvesDataQuery: false,
+                        processingTime: 0
+                    });
+                }
             } finally {
+                currentAbortController = null;
                 hideTyping();
             }
         }
@@ -701,12 +776,25 @@
                 metaInfo += `</div>`;
             }
 
+            // 添加消息操作按钮
+            let actionsHtml = '';
+            if (type === 'user') {
+                actionsHtml = `
+                    <div class="message-actions">
+                        <button class="message-action-btn" onclick="editAndResend(this, '${escapeHtml(content)}')">
+                            ✏️ 编辑并重新发送
+                        </button>
+                    </div>
+                `;
+            }
+
             messageDiv.innerHTML = `
                 <div class="message-avatar">${avatar}</div>
                 <div>
                     <div class="message-content">${formatMessage(content)}</div>
                     <div class="message-time">${timeStr}</div>
                     ${metaInfo}
+                    ${actionsHtml}
                 </div>
             `;
 
@@ -858,7 +946,12 @@
         function showTyping() {
             isLoading = true;
             document.getElementById('typingIndicator').style.display = 'flex';
-            document.getElementById('sendButton').disabled = true;
+            
+            const sendButton = document.getElementById('sendButton');
+            sendButton.classList.add('stop');
+            sendButton.innerHTML = '⬛';
+            sendButton.onclick = stopGeneration;
+            sendButton.disabled = false;
 
             const messagesContainer = document.getElementById('chatMessages');
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
@@ -868,7 +961,36 @@
         function hideTyping() {
             isLoading = false;
             document.getElementById('typingIndicator').style.display = 'none';
-            document.getElementById('sendButton').disabled = false;
+            
+            const sendButton = document.getElementById('sendButton');
+            sendButton.classList.remove('stop');
+            sendButton.innerHTML = '➤';
+            sendButton.onclick = sendMessage;
+            sendButton.disabled = false;
+        }
+
+        // 编辑并重新发送消息
+        function editAndResend(button, originalMessage) {
+            const input = document.getElementById('chatInput');
+            input.value = originalMessage;
+            autoResize(input);
+            input.focus();
+            
+            // 滚动到输入框
+            input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        // HTML转义函数
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;',
+                '\n': '\\n'
+            };
+            return text.replace(/[&<>"'\n]/g, m => map[m]);
         }
 
         // 开始新会话
