@@ -690,8 +690,13 @@
             // 创建新的 AbortController 用于取消请求
             currentAbortController = new AbortController();
 
+            // 创建助手消息占位符
+            const assistantMessageDiv = addMessage('assistant', '', new Date());
+            const contentDiv = assistantMessageDiv.querySelector('.message-content');
+            let fullContent = '';
+
             try {
-                const response = await fetch('/api/chat/message', {
+                const response = await fetch('/api/chat/stream', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -706,31 +711,46 @@
                     signal: currentAbortController.signal
                 });
 
-                const data = await response.json();
-
-                if (data.success) {
-                    addMessage('assistant', data.message, new Date(), {
-                        involvesDataQuery: data.involvesDataQuery,
-                        queriedTables: data.queriedTables,
-                        processingTime: data.processingTimeMs,
-                        dataQuerySummary: data.dataQuerySummary,
-                        charts: data.charts || []
-                    });
-                } else {
-                    addMessage('assistant', `抱歉，处理您的请求时出现了问题：${data.message}`, new Date(), {
-                        involvesDataQuery: false,
-                        processingTime: data.processingTimeMs || 0
-                    });
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
                 }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value, { stream: true });
+                    buffer += chunk;
+                    
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop(); // Keep the last incomplete line
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data:')) {
+                            const content = line.substring(5);
+                            fullContent += content;
+                        }
+                    }
+                    
+                    contentDiv.innerHTML = formatMessage(fullContent);
+                    
+                    // Auto scroll
+                    const messagesContainer = document.getElementById('chatMessages');
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                }
+
             } catch (error) {
                 if (error.name === 'AbortError') {
                     console.log('请求已被用户取消');
+                    fullContent += '\n[已停止生成]';
+                    contentDiv.innerHTML = formatMessage(fullContent);
                 } else {
                     console.error('发送消息失败:', error);
-                    addMessage('assistant', '抱歉，网络连接出现问题，请稍后重试。', new Date(), {
-                        involvesDataQuery: false,
-                        processingTime: 0
-                    });
+                    contentDiv.innerHTML = '抱歉，网络连接出现问题，请稍后重试。';
                 }
             } finally {
                 currentAbortController = null;
@@ -835,6 +855,7 @@
 
             messagesContainer.appendChild(messageDiv);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            return messageDiv;
         }
 
         // 格式化消息内容

@@ -40,7 +40,7 @@ public class NL2SQLService {
         字段：unique_key, closed_at, agency, complaint_type, descriptor, status, resolution_description, latitude, longitude, borough, created_at
         
         3. nyc_traffic_accidents - 机动车碰撞事故 (注意：数据为2024年2月)
-        字段：collision_id, crash_date, crash_time, borough, zip_code, latitude, longitude, on_street_name, cross_street_name, 
+        字段：collision_id, crash_date, crash_time, borough, latitude, longitude, on_street_name, cross_street_name, 
                off_street_name, number_of_persons_injured, number_of_persons_killed, number_of_pedestrians_injured, 
                number_of_pedestrians_killed, number_of_cyclist_injured, number_of_cyclist_killed, 
                number_of_motorist_injured, number_of_motorist_killed, contributing_factor_vehicle_1, 

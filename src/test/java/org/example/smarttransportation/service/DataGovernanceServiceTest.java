@@ -48,13 +48,13 @@ class DataGovernanceServiceTest {
         accident1.setOnStreetName("曼哈顿大道");
         accident1.setNumberOfPersonsInjured(2);
         accident1.setNumberOfPersonsKilled(0);
-        accident1.setCrashDate(LocalDateTime.of(2024, 2, 15, 8, 30));
+        accident1.setCrashDate(LocalDateTime.of(2024, 2, 15, 8, 30).toLocalDate());
 
         TrafficAccident accident2 = new TrafficAccident();
         accident2.setCrossStreetName("曼哈顿街");
         accident2.setNumberOfPersonsInjured(1);
         accident2.setNumberOfPersonsKilled(1);
-        accident2.setCrashDate(LocalDateTime.of(2024, 2, 20, 18, 45));
+        accident2.setCrashDate(LocalDateTime.of(2024, 2, 20, 18, 45).toLocalDate());
 
         List<TrafficAccident> accidents = Arrays.asList(accident1, accident2);
 
@@ -70,7 +70,7 @@ class DataGovernanceServiceTest {
         List<Complaint> complaints = Arrays.asList(complaint1, complaint2);
 
         // 设置模拟行为
-        when(trafficAccidentRepository.findByDateRange(start, end)).thenReturn(accidents);
+        when(trafficAccidentRepository.findByDateRange(start.toLocalDate(), end.toLocalDate())).thenReturn(accidents);
         when(complaintRepository.findByLocationAndDateRange(location, start, end)).thenReturn(complaints);
 
         // 执行测试

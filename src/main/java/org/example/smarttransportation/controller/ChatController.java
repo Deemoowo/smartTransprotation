@@ -10,6 +10,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.http.MediaType;
+import reactor.core.publisher.Flux;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -28,6 +31,33 @@ public class ChatController {
 
     @Autowired
     private AIAssistantService aiAssistantService;
+
+    /**
+     * 处理用户对话请求（流式响应）
+     */
+    @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<String> streamMessage(@RequestBody ChatRequest request) {
+        try {
+            // 参数验证
+            if (request.getMessage() == null || request.getMessage().trim().isEmpty()) {
+                return Flux.just("消息内容不能为空");
+            }
+
+            // 生成会话ID（如果没有提供）
+            if (request.getSessionId() == null || request.getSessionId().trim().isEmpty()) {
+                request.setSessionId(UUID.randomUUID().toString());
+            }
+
+            logger.info("收到流式对话请求 - 会话ID: {}, 消息: {}", request.getSessionId(), request.getMessage());
+
+            // 调用AI助手服务（流式）
+            return aiAssistantService.streamChat(request);
+
+        } catch (Exception e) {
+            logger.error("流式对话处理失败", e);
+            return Flux.just("服务器内部错误: " + e.getMessage());
+        }
+    }
 
     /**
      * 处理用户对话请求
