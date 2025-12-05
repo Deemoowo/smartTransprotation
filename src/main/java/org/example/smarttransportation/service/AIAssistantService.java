@@ -1,6 +1,7 @@
 package org.example.smarttransportation.service;
 
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.smarttransportation.dto.ChartData;
 import org.example.smarttransportation.dto.ChatRequest;
 import org.example.smarttransportation.dto.ChatResponse;
@@ -14,6 +15,8 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -47,6 +50,9 @@ public class AIAssistantService {
 
     @Autowired
     private WeatherApiService weatherApiService;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     public AIAssistantService(ChatModel chatModel) {
         // 构建ChatClient，设置专门的交通助手参数
@@ -122,6 +128,124 @@ public class AIAssistantService {
             errorResponse.setProcessingTimeMs(System.currentTimeMillis() - startTime);
             return errorResponse;
         }
+    }
+
+    /**
+     * 流式对话接口
+     */
+    public Flux<String> streamChat(ChatRequest request) {
+        String sessionId = request.getSessionId() != null ? request.getSessionId() : UUID.randomUUID().toString();
+        long startTime = System.currentTimeMillis();
+
+        try {
+            ScenarioType scenarioType = identifyScenario(request.getMessage());
+            
+            if (scenarioType == ScenarioType.GENERAL) {
+                return streamGeneralScenario(request, sessionId, startTime);
+            } else {
+                // 其他场景暂时使用非流式处理，包装成Flux
+                return Mono.fromCallable(() -> {
+                    ChatResponse response = chat(request);
+                    return response.getMessage();
+                }).flux();
+            }
+        } catch (Exception e) {
+            logger.error("流式对话初始化失败", e);
+            return Flux.just("处理对话时发生错误: " + e.getMessage());
+        }
+    }
+
+    private Flux<String> streamGeneralScenario(ChatRequest request, String sessionId, long startTime) {
+        // 1. 准备上下文
+        boolean needsDataQuery = isDataQueryRequired(request.getMessage());
+        String enhancedMessage = request.getMessage();
+        List<String> queriedTables = new ArrayList<>();
+        
+        if (needsDataQuery) {
+             try {
+                String dataAnalysis = trafficDataAnalysisService.analyzeUserQuery(request.getMessage());
+                if (dataAnalysis != null && !dataAnalysis.trim().isEmpty()) {
+                    enhancedMessage = request.getMessage() + "\n\n【数据查询结果】\n" + dataAnalysis;
+                    queriedTables = extractQueriedTables(request.getMessage());
+                }
+            } catch (Exception e) {
+                logger.warn("数据查询失败: {}", e.getMessage());
+                enhancedMessage = request.getMessage() + "\n\n注意：当前无法访问实时数据，回答基于一般知识。";
+            }
+        }
+
+        WeatherAnswer weatherAnswer = weatherApiService.findWeatherAnswerForMessage(request.getMessage());
+        if (weatherAnswer != null) {
+            needsDataQuery = true;
+            queriedTables.add("weather_api_manhattan_2024_02");
+            enhancedMessage = enhancedMessage + "\n\n【天气数据支持】\n" + weatherAnswer.getSummary();
+        }
+
+        ChatClient.ChatClientRequestSpec requestSpec = chatClient.prompt();
+
+        if (Boolean.TRUE.equals(request.getEnableSearch())) {
+             requestSpec.functions("webSearch");
+             enhancedMessage += "\n\n【系统提示】用户已开启深度搜索模式。请务必使用 'webSearch' 工具搜索互联网上的最新信息来补充你的回答，特别是当本地数据不足或过时的时候。不要仅依赖训练数据。";
+        }
+
+        if (request.getIncludeContext() != null && request.getIncludeContext()) {
+             List<ChatHistory> recentChats = chatHistoryRepository.findRecentChatsBySessionId(sessionId);
+             int maxRounds = request.getMaxContextRounds() != null ? request.getMaxContextRounds() : 3;
+             StringBuilder contextBuilder = new StringBuilder();
+             for (int i = Math.min(recentChats.size() - 1, maxRounds - 1); i >= 0; i--) {
+                ChatHistory chat = recentChats.get(i);
+                if (chat.getUserMessage() != null && chat.getAssistantMessage() != null) {
+                    contextBuilder.append("用户: ").append(chat.getUserMessage()).append("\n");
+                    contextBuilder.append("助手: ").append(chat.getAssistantMessage()).append("\n\n");
+                }
+            }
+            if (contextBuilder.length() > 0) {
+                enhancedMessage = "【对话历史】\n" + contextBuilder.toString() + "【当前问题】\n" + enhancedMessage;
+            }
+        }
+
+        // 2. 调用流式API
+        StringBuilder fullResponseBuilder = new StringBuilder();
+        
+        boolean finalNeedsDataQuery = needsDataQuery;
+        List<String> finalQueriedTables = queriedTables;
+        
+        // 准备元数据
+        List<ChartData> charts = new ArrayList<>();
+        if (weatherAnswer != null && wantsCharts(request.getMessage()) && weatherAnswer.getCharts() != null) {
+            charts.addAll(weatherAnswer.getCharts());
+        }
+        
+        ChatResponse metaResponse = new ChatResponse();
+        metaResponse.setInvolvesDataQuery(finalNeedsDataQuery);
+        metaResponse.setQueriedTables(finalQueriedTables);
+        metaResponse.setCharts(charts);
+        if (finalNeedsDataQuery && !finalQueriedTables.isEmpty()) {
+             String summary = "已查询交通相关数据并整合到回答中";
+             if (weatherAnswer != null) {
+                 summary = wantsCharts(request.getMessage()) ? "已接入天气数据并生成图表" : "已接入天气数据（未请求图表）";
+             }
+             metaResponse.setDataQuerySummary(summary);
+        }
+
+        Flux<String> aiStream = requestSpec.user(enhancedMessage)
+                .stream()
+                .content()
+                .doOnNext(fullResponseBuilder::append)
+                .doOnComplete(() -> {
+                    saveChatHistory(sessionId, request.getMessage(), fullResponseBuilder.toString(), finalNeedsDataQuery, finalQueriedTables);
+                })
+                .doOnError(e -> logger.error("流式生成失败", e));
+                
+        // 在流结束后追加元数据
+        return aiStream.concatWith(Mono.fromCallable(() -> {
+            try {
+                return "[METADATA]" + objectMapper.writeValueAsString(metaResponse);
+            } catch (Exception e) {
+                logger.error("序列化元数据失败", e);
+                return "";
+            }
+        }));
     }
 
     /**
@@ -372,13 +496,11 @@ public class AIAssistantService {
                     request.getMaxContextRounds() : 3;
 
                 StringBuilder contextBuilder = new StringBuilder();
-                int contextCount = 0;
-                for (int i = Math.min(recentChats.size() - 1, maxRounds - 1); i >= 0; i--) {
+             for (int i = Math.min(recentChats.size() - 1, maxRounds - 1); i >= 0; i--) {
                     ChatHistory chat = recentChats.get(i);
                     if (chat.getUserMessage() != null && chat.getAssistantMessage() != null) {
                         contextBuilder.append("用户: ").append(chat.getUserMessage()).append("\n");
                         contextBuilder.append("助手: ").append(chat.getAssistantMessage()).append("\n\n");
-                        contextCount++;
                     }
                 }
 

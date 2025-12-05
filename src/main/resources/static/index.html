@@ -690,8 +690,13 @@
             // 创建新的 AbortController 用于取消请求
             currentAbortController = new AbortController();
 
+            // 创建助手消息占位符
+            const assistantMessageDiv = addMessage('assistant', '', new Date());
+            const contentDiv = assistantMessageDiv.querySelector('.message-content');
+            let fullContent = '';
+
             try {
-                const response = await fetch('/api/chat/message', {
+                const response = await fetch('/api/chat/stream', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -706,31 +711,107 @@
                     signal: currentAbortController.signal
                 });
 
-                const data = await response.json();
-
-                if (data.success) {
-                    addMessage('assistant', data.message, new Date(), {
-                        involvesDataQuery: data.involvesDataQuery,
-                        queriedTables: data.queriedTables,
-                        processingTime: data.processingTimeMs,
-                        dataQuerySummary: data.dataQuerySummary,
-                        charts: data.charts || []
-                    });
-                } else {
-                    addMessage('assistant', `抱歉，处理您的请求时出现了问题：${data.message}`, new Date(), {
-                        involvesDataQuery: false,
-                        processingTime: data.processingTimeMs || 0
-                    });
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
                 }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value, { stream: true });
+                    buffer += chunk;
+                    
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop(); // Keep the last incomplete line
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data:')) {
+                            const content = line.substring(5);
+                            if (content.includes('[METADATA]')) {
+                                const parts = content.split('[METADATA]');
+                                fullContent += parts[0];
+                                try {
+                                    const metaJson = parts[1];
+                                    const meta = JSON.parse(metaJson);
+                                    
+                                    // 更新元数据信息
+                                    let metaInfo = `<div class="message-meta">`;
+                                    metaInfo += `⏱️ 处理时间: ${meta.processingTimeMs || 'N/A'}ms`; // 流式暂无准确总耗时
+                                    if (meta.involvesDataQuery) {
+                                        metaInfo += `<span class="data-query-indicator">📊 数据查询</span>`;
+                                    }
+                                    if (meta.queriedTables && meta.queriedTables.length > 0) {
+                                        metaInfo += `<br>📋 查询表: ${meta.queriedTables.join(', ')}`;
+                                    }
+                                    if (meta.dataQuerySummary) {
+                                        metaInfo += `<br>📈 ${meta.dataQuerySummary}`;
+                                    }
+                                    metaInfo += `</div>`;
+                                    
+                                    // 插入元数据到消息底部
+                                    const metaDiv = document.createElement('div');
+                                    metaDiv.innerHTML = metaInfo;
+                                    assistantMessageDiv.children[1].appendChild(metaDiv);
+                                    
+                                    // 渲染图表
+                                    if (meta.charts && meta.charts.length > 0) {
+                                        const chartsContainer = document.createElement('div');
+                                        chartsContainer.className = 'chart-wrapper';
+                                        
+                                        meta.charts.forEach((chart, index) => {
+                                            const card = document.createElement('div');
+                                            card.className = 'chart-card';
+                                            const title = document.createElement('div');
+                                            title.className = 'chart-title';
+                                            title.textContent = chart.title || `图表 ${index + 1}`;
+                                            const canvas = document.createElement('canvas');
+                                            card.appendChild(title);
+                                            card.appendChild(canvas);
+                                            
+                                            const actions = document.createElement('div');
+                                            actions.className = 'chart-actions';
+                                            const btn = document.createElement('button');
+                                            btn.className = 'chart-btn';
+                                            btn.textContent = '查看全图';
+                                            btn.onclick = () => openChartModal(chart);
+                                            actions.appendChild(btn);
+                                            card.appendChild(actions);
+                                            
+                                            chartsContainer.appendChild(card);
+                                            setTimeout(() => renderChart(canvas, chart, false), 0);
+                                        });
+                                        assistantMessageDiv.children[1].appendChild(chartsContainer);
+                                    }
+                                    
+                                } catch (e) {
+                                    console.error('解析元数据失败', e);
+                                }
+                            } else {
+                                fullContent += content;
+                            }
+                        }
+                    }
+                    
+                    contentDiv.innerHTML = formatMessage(fullContent);
+                    
+                    // Auto scroll
+                    const messagesContainer = document.getElementById('chatMessages');
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                }
+
             } catch (error) {
                 if (error.name === 'AbortError') {
                     console.log('请求已被用户取消');
+                    fullContent += '\n[已停止生成]';
+                    contentDiv.innerHTML = formatMessage(fullContent);
                 } else {
                     console.error('发送消息失败:', error);
-                    addMessage('assistant', '抱歉，网络连接出现问题，请稍后重试。', new Date(), {
-                        involvesDataQuery: false,
-                        processingTime: 0
-                    });
+                    contentDiv.innerHTML = '抱歉，网络连接出现问题，请稍后重试。';
                 }
             } finally {
                 currentAbortController = null;
@@ -835,6 +916,7 @@
 
             messagesContainer.appendChild(messageDiv);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            return messageDiv;
         }
 
         // 格式化消息内容
