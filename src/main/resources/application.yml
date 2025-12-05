@@ -8,7 +8,7 @@ spring:
     allow-bean-definition-overriding: true
   ai:
     dashscope:
-      api-key: sk-a8427cc4fd004c0dab820d3eac03218f
+      api-key: sk-ef988a59f27e45f4b88f0c7847a5ae7c
 
   # MySQL 数据库配置
   datasource:
@@ -65,3 +65,6 @@ weather:
     location: Manhattan,NY
     start-date: 2024-02-01
     end-date: 2024-02-29
+
+tavily:
+  api-key: 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

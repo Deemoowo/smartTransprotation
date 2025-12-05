@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -47,6 +48,9 @@ public class AIAssistantService {
 
     @Autowired
     private WeatherApiService weatherApiService;
+
+    @Autowired
+    private NL2SQLService nl2sqlService;
 
     public AIAssistantService(ChatModel chatModel) {
         // 构建ChatClient，设置专门的交通助手参数
@@ -234,6 +238,7 @@ public class AIAssistantService {
         try {
             // 使用RAG服务处理应急响应场景
             RAGService.AnswerResult result = ragService.answer(request.getMessage(), sessionId);
+            List<ChartData> charts = buildChartsFromQueryData(result.getQueryData());
 
             // 构建响应消息
             StringBuilder responseMessage = new StringBuilder();
@@ -256,6 +261,8 @@ public class AIAssistantService {
 
             // 构建响应
             ChatResponse response = ChatResponse.success(sessionId, responseMessage.toString());
+            response.setCharts(charts);
+            response.setInvolvesDataQuery(result.getQueryData() != null && !result.getQueryData().isEmpty());
             response.setProcessingTimeMs(System.currentTimeMillis() - startTime);
             return response;
 
@@ -272,6 +279,7 @@ public class AIAssistantService {
         try {
             // 使用RAG服务处理数据驱动治理场景
             RAGService.AnswerResult result = ragService.answer(request.getMessage(), sessionId);
+            List<ChartData> charts = buildChartsFromQueryData(result.getQueryData());
 
             // 构建响应消息
             StringBuilder responseMessage = new StringBuilder();
@@ -294,6 +302,8 @@ public class AIAssistantService {
 
             // 构建响应
             ChatResponse response = ChatResponse.success(sessionId, responseMessage.toString());
+            response.setCharts(charts);
+            response.setInvolvesDataQuery(result.getQueryData() != null && !result.getQueryData().isEmpty());
             response.setProcessingTimeMs(System.currentTimeMillis() - startTime);
             return response;
 
@@ -313,7 +323,6 @@ public class AIAssistantService {
             String enhancedMessage = request.getMessage();
             List<String> queriedTables = new ArrayList<>();
             List<ChartData> charts = new ArrayList<>();
-            boolean wantsCharts = wantsCharts(request.getMessage());
 
             if (needsDataQuery) {
                 // 调用数据分析服务
@@ -334,10 +343,26 @@ public class AIAssistantService {
             if (weatherAnswer != null) {
                 needsDataQuery = true;
                 queriedTables.add("weather_api_manhattan_2024_02");
-                if (wantsCharts && weatherAnswer.getCharts() != null) {
+                if (weatherAnswer.getCharts() != null) {
                     charts.addAll(weatherAnswer.getCharts());
                 }
                 enhancedMessage = enhancedMessage + "\n\n【天气数据支持】\n" + weatherAnswer.getSummary();
+            }
+
+            // 如果用户查询涉及数据，尝试基于查询结果生成可视化图表
+            if (needsDataQuery && nl2sqlService != null && nl2sqlService.isNL2SQLServiceAvailable()) {
+                try {
+                    NL2SQLService.QueryResult sqlResult = nl2sqlService.executeQuery(request.getMessage());
+                    if (sqlResult != null && sqlResult.isSuccess()
+                        && sqlResult.getData() != null && !sqlResult.getData().isEmpty()) {
+                        List<ChartData> queryCharts = buildChartsFromQueryData(sqlResult.getData());
+                        if (!queryCharts.isEmpty()) {
+                            charts.addAll(queryCharts);
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.warn("基于数据查询生成图表失败: {}", e.getMessage());
+                }
             }
 
             // 构建对话上下文
@@ -397,12 +422,14 @@ public class AIAssistantService {
             response.setCharts(charts);
             response.setProcessingTimeMs(System.currentTimeMillis() - startTime);
 
-            if (needsDataQuery && !queriedTables.isEmpty()) {
+            if (needsDataQuery && (!queriedTables.isEmpty() || !charts.isEmpty())) {
                 String summary = "已查询交通相关数据并整合到回答中";
                 if (weatherAnswer != null) {
-                    summary = wantsCharts
+                    summary = !charts.isEmpty()
                         ? "已接入天气数据并生成图表"
-                        : "已接入天气数据（未请求图表）";
+                        : "已接入天气数据";
+                } else if (!charts.isEmpty()) {
+                    summary = "已生成数据图表用于辅助说明";
                 }
                 response.setDataQuerySummary(summary);
             }
@@ -465,12 +492,80 @@ public class AIAssistantService {
     }
 
     /**
-     * 判断用户是否请求可视化图表
+     * 从结构化查询结果中尝试生成基础图表
      */
-    private boolean wantsCharts(String userMessage) {
-        String msg = userMessage.toLowerCase();
-        return msg.contains("图") || msg.contains("chart") || msg.contains("图表")
-                || msg.contains("趋势") || msg.contains("可视化");
+    private List<ChartData> buildChartsFromQueryData(List<Map<String, Object>> queryData) {
+        List<ChartData> charts = new ArrayList<>();
+        if (queryData == null || queryData.isEmpty()) {
+            return charts;
+        }
+
+        Map<String, Object> firstRow = queryData.get(0);
+        if (firstRow == null || firstRow.isEmpty()) {
+            return charts;
+        }
+
+        String labelKey = null;
+        String valueKey = null;
+
+        for (Map.Entry<String, Object> entry : firstRow.entrySet()) {
+            if (labelKey == null && !(entry.getValue() instanceof Number)) {
+                labelKey = entry.getKey();
+            }
+            if (valueKey == null && entry.getValue() instanceof Number) {
+                valueKey = entry.getKey();
+            }
+        }
+
+        if (labelKey == null && !firstRow.isEmpty()) {
+            labelKey = firstRow.keySet().iterator().next();
+        }
+        if (valueKey == null) {
+            return charts;
+        }
+
+        List<String> labels = new ArrayList<>();
+        List<Double> values = new ArrayList<>();
+        int maxPoints = 20;
+
+        for (Map<String, Object> row : queryData) {
+            if (row == null) {
+                continue;
+            }
+            Object valueObj = row.get(valueKey);
+            if (!(valueObj instanceof Number)) {
+                continue;
+            }
+            Object labelObj = row.get(labelKey);
+            labels.add(labelObj != null ? labelObj.toString() : "未知");
+            values.add(((Number) valueObj).doubleValue());
+
+            if (labels.size() >= maxPoints) {
+                break;
+            }
+        }
+
+        if (labels.isEmpty()) {
+            return charts;
+        }
+
+        String chartType = "bar";
+        if (labelKey != null) {
+            String lower = labelKey.toLowerCase();
+            if (lower.contains("date") || lower.contains("time")) {
+                chartType = "line";
+            }
+        }
+
+        ChartData chart = ChartData.singleSeries(
+            "查询结果 (" + valueKey + " 按 " + labelKey + ")",
+            chartType,
+            labels,
+            values,
+            valueKey
+        );
+        charts.add(chart);
+        return charts;
     }
 
     /**
