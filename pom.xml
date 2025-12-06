@@ -29,11 +29,17 @@
     <properties>
         <java.version>17</java.version>
     </properties>
+
+
+    <!-- ✅ 新增的仓库配置 -->
     <repositories>
         <repository>
             <id>spring-milestones</id>
             <name>Spring Milestones</name>
             <url>https://repo.spring.io/milestone</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
             <snapshots>
                 <enabled>false</enabled>
             </snapshots>
@@ -88,7 +94,7 @@
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
 
-        <!-- Milvus Lite (嵌入式版本) -->
+        <!--  Lite (嵌入式版本) -->
         <dependency>
             <groupId>io.milvus</groupId>
             <artifactId>milvus-sdk-java</artifactId>

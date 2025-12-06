@@ -8,16 +8,13 @@ spring:
     allow-bean-definition-overriding: true
   ai:
     dashscope:
-      api-key: sk-012834a6b13349a79a98c3d7723b6851
-      chat:
-        options:
-          model: qwen-flash-2025-07-28
+      api-key: sk-ef988a59f27e45f4b88f0c7847a5ae7c
 
   # MySQL 数据库配置
   datasource:
     url: jdbc:mysql://localhost:3306/smart_transportation?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
-    password: root
+    password: zzl030318
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   # JPA 配置
