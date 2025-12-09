@@ -2,6 +2,7 @@ package org.example.smarttransportation.service;
 
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -19,6 +20,7 @@ import java.util.ArrayList;
 public class EmbeddingService {
     
     @Autowired(required = false)
+    @Qualifier("openAiEmbeddingModel")
     private EmbeddingModel embeddingModel;
     
     /**

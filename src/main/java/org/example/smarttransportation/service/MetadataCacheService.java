@@ -24,7 +24,9 @@ public class MetadataCacheService {
                 v.setInvolvesDataQuery(false);
             }
             if (charts != null) {
-                if (v.getCharts() == null) v.setCharts(new ArrayList<>());
+                if (v.getCharts() == null) {
+                    v.setCharts(new ArrayList<>());
+                }
                 v.getCharts().addAll(charts);
                 v.setInvolvesDataQuery(true);
             }
@@ -42,7 +44,9 @@ public class MetadataCacheService {
                 v.setInvolvesDataQuery(false);
             }
             if (tables != null) {
-                if (v.getQueriedTables() == null) v.setQueriedTables(new ArrayList<>());
+                if (v.getQueriedTables() == null) {
+                    v.setQueriedTables(new ArrayList<>());
+                }
                 v.getQueriedTables().addAll(tables);
                 v.setInvolvesDataQuery(true);
             }

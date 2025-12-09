@@ -1,6 +1,7 @@
 package org.example.smarttransportation.service;
 
-import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
+// import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions; // 原 DashScope 导入，已切换到 OpenAI
+import org.springframework.ai.openai.OpenAiChatOptions;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.smarttransportation.dto.ChartData;
 import org.example.smarttransportation.dto.ChatRequest;
@@ -14,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
@@ -62,11 +64,15 @@ public class AIAssistantService {
     @Autowired
     private MetadataCacheService metadataCacheService;
 
-    public AIAssistantService(ChatModel chatModel) {
+    public AIAssistantService(@Qualifier("openAiChatModel") ChatModel chatModel) {
         // 构建ChatClient，设置专门的交通助手参数
         this.chatClient = ChatClient.builder(chatModel)
                 .defaultOptions(
-                        DashScopeChatOptions.builder()
+                        // DashScopeChatOptions.builder() // 原 DashScope 配置，已切换到 OpenAI
+                        //         .withTopP(0.8)
+                        //         .withTemperature(0.7)
+                        //         .build()
+                        OpenAiChatOptions.builder()
                                 .withTopP(0.8)
                                 .withTemperature(0.7)
                                 .build()

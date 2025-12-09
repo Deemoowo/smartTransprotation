@@ -87,8 +87,12 @@ public class TrafficDataAnalysisService {
                     }
                     // 简单推断查询的表名（这里简化处理，实际可以从SQL解析）
                     List<String> tables = new ArrayList<>();
-                    if (queryResult.getSql().toLowerCase().contains("accident")) tables.add("nyc_traffic_accidents");
-                    if (queryResult.getSql().toLowerCase().contains("subway")) tables.add("subway_ridership");
+                    if (queryResult.getSql().toLowerCase().contains("accident")) {
+                        tables.add("nyc_traffic_accidents");
+                    }
+                    if (queryResult.getSql().toLowerCase().contains("subway")) {
+                        tables.add("subway_ridership");
+                    }
                     metadataCacheService.addQueriedTables(sessionId, tables);
                 }
 
@@ -139,9 +143,13 @@ public class TrafficDataAnalysisService {
                             String key = field.getKey();
                             Object value = field.getValue();
                             // 跳过 data_type 字段，因为已经在标题中显示了
-                            if ("data_type".equals(key)) continue;
+                            if ("data_type".equals(key)) {
+                                continue;
+                            }
                             // 跳过空值
-                            if (value == null) continue;
+                            if (value == null) {
+                                continue;
+                            }
 
                             String displayKey = simplifyFieldName(key);
                             analysis.append(String.format("%s: %s, ", displayKey, value));
@@ -290,7 +298,9 @@ public class TrafficDataAnalysisService {
                  }
              }
              // 实在不行就用第一个
-             if (labelKey == null) labelKey = firstRow.keySet().iterator().next();
+             if (labelKey == null) {
+                 labelKey = firstRow.keySet().iterator().next();
+             }
         }
         
         if (valueKey == null) {
@@ -302,18 +312,26 @@ public class TrafficDataAnalysisService {
         int maxPoints = 20;
 
         for (Map<String, Object> row : queryData) {
-            if (row == null) continue;
+            if (row == null) {
+                continue;
+            }
             Object valueObj = row.get(valueKey);
-            if (!(valueObj instanceof Number)) continue;
+            if (!(valueObj instanceof Number)) {
+                continue;
+            }
             
             Object labelObj = row.get(labelKey);
             labels.add(labelObj != null ? labelObj.toString() : "未知");
             values.add(((Number) valueObj).doubleValue());
 
-            if (labels.size() >= maxPoints) break;
+            if (labels.size() >= maxPoints) {
+                break;
+            }
         }
 
-        if (labels.isEmpty()) return charts;
+        if (labels.isEmpty()) {
+            return charts;
+        }
 
         String chartType = "bar";
         if (labelKey != null) {
@@ -346,7 +364,9 @@ public class TrafficDataAnalysisService {
      * 简化字段名显示
      */
     private String simplifyFieldName(String fieldName) {
-        if (fieldName == null) return "未知";
+        if (fieldName == null) {
+            return "未知";
+        }
 
         // 处理常见的字段名
         switch (fieldName.toLowerCase()) {

@@ -3,6 +3,7 @@ package org.example.smarttransportation.service;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -31,6 +32,7 @@ public class RAGService {
     private EmbeddingService embeddingService;
     
     @Autowired(required = false)
+    @Qualifier("openAiChatModel")
     private ChatModel chatModel;
 
     private ChatClient chatClient;

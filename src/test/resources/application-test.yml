@@ -7,8 +7,15 @@ spring:
   main:
     allow-bean-definition-overriding: true
   ai:
-    dashscope:
-      api-key: sk-012834a6b13349a79a98c3d7723b6851
+    # dashscope: # 原 DashScope 配置，已切换到 OpenAI
+    #   api-key: sk-012834a6b13349a79a98c3d7723b6851
+    openai:
+      api-key: 96662af9a5fa753462e291e3a219cd89
+      base-url: https://idealab.alibaba-inc.com/api/openai/v1
+      chat:
+        options:
+          model: qwen2-72b-instruct
+          temperature: 0.7
 
   # MySQL 数据库配置 - 使用相同的测试数据库
   datasource:

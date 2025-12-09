@@ -12,6 +12,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Description;
 
+import java.util.ArrayList;
 import java.util.function.Function;
 
 @Configuration
@@ -22,18 +23,51 @@ public class ToolsConfig {
     @Bean
     @Description("Search the web for information using Tavily API. Use this tool when you need up-to-date information or facts not in your knowledge base.")
     public Function<WebSearchRequest, TavilySearchService.TavilyResponse> webSearch(TavilySearchService tavilySearchService) {
-        return request -> tavilySearchService.search(request.query());
+        return request -> {
+            try {
+                TavilySearchService.TavilyResponse result = tavilySearchService.search(request.query());
+
+                // 确保返回的对象不为null
+                if (result == null) {
+                    return new TavilySearchService.TavilyResponse("搜索结果暂时不可用。", request.query(), new ArrayList<>());
+                }
+
+                return result;
+
+            } catch (Exception e) {
+                // 异常处理，返回安全的默认搜索结果
+                return new TavilySearchService.TavilyResponse("网络搜索时发生错误，请稍后重试。", request.query(), new ArrayList<>());
+            }
+        };
     }
 
     @Bean
     @Description("查询纽约市曼哈顿区的交通状况。当用户询问'交通怎么样'、'拥堵情况'、'事故'、'客流'、'出行建议'或具体日期的交通分析时，必须调用此工具。")
     public Function<TrafficQueryRequest, String> trafficQuery(TrafficDataAnalysisService trafficDataAnalysisService, MetadataCacheService metadataCacheService) {
         return request -> {
-            if (request.sessionId() != null) {
-                metadataCacheService.addThought(request.sessionId(), "🤖 决定调用工具: trafficQuery");
-                metadataCacheService.addThought(request.sessionId(), "⚙️ 参数: " + request.query());
+            try {
+                if (request.sessionId() != null) {
+                    metadataCacheService.addThought(request.sessionId(), "🤖 决定调用工具: trafficQuery");
+                    metadataCacheService.addThought(request.sessionId(), "⚙️ 参数: " + request.query());
+                }
+
+                String result = trafficDataAnalysisService.analyzeUserQuery(request.query(), request.sessionId());
+
+                // 确保返回的字符串是安全的，避免JSON解析错误
+                if (result == null || result.trim().isEmpty()) {
+                    return "暂无相关交通数据。";
+                }
+
+                // 清理可能导致JSON解析问题的字符
+                result = result.replaceAll("[\u0000-\u001F\u007F]", ""); // 移除控制字符
+                result = result.replace("\"", "'"); // 替换双引号避免JSON冲突
+
+                return result;
+
+            } catch (Exception e) {
+                // 异常处理，返回安全的错误信息
+                return "交通数据查询时发生错误，请稍后重试。";
             }
-            return trafficDataAnalysisService.analyzeUserQuery(request.query(), request.sessionId());
         };
     }
 
@@ -41,10 +75,24 @@ public class ToolsConfig {
     @Description("查询纽约曼哈顿区的天气情况。当用户询问天气、气温、降雨或天气对交通的影响时调用。")
     public Function<WeatherQueryRequest, WeatherAnswer> weatherQuery(WeatherApiService weatherApiService, MetadataCacheService metadataCacheService) {
         return request -> {
-            if (request.sessionId() != null) {
-                metadataCacheService.addThought(request.sessionId(), "🤖 决定调用工具: weatherQuery");
+            try {
+                if (request.sessionId() != null) {
+                    metadataCacheService.addThought(request.sessionId(), "🤖 决定调用工具: weatherQuery");
+                }
+
+                WeatherAnswer result = weatherApiService.fetchManhattanFeb2024Weather(request.sessionId());
+
+                // 确保返回的对象不为null
+                if (result == null) {
+                    return new WeatherAnswer("天气数据暂时不可用。", false, "2024-02-01 至 2024-02-29", new ArrayList<>());
+                }
+
+                return result;
+
+            } catch (Exception e) {
+                // 异常处理，返回安全的默认天气信息
+                return new WeatherAnswer("天气数据查询时发生错误，请稍后重试。", false, "2024-02-01 至 2024-02-29", new ArrayList<>());
             }
-            return weatherApiService.fetchManhattanFeb2024Weather(request.sessionId());
         };
     }
 

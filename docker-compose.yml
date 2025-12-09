@@ -74,6 +74,27 @@ services:
     networks:
       - default
 
+  app:
+    build: .
+    container_name: smart-transport-app
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/smart_transportation?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - MILVUS_HOST=standalone
+      - MILVUS_PORT=19530
+    depends_on:
+      - mysql
+      - redis
+      - standalone
+    networks:
+      - default
+      - milvus
+
 networks:
   milvus:
     driver: bridge

@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -29,6 +30,7 @@ public class NL2SQLService {
     private JdbcTemplate jdbcTemplate;
     
     @Autowired(required = false)
+    @Qualifier("openAiChatModel")
     private ChatModel chatModel;
 
     private ChatClient chatClient;
