@@ -30,7 +30,8 @@ public class NL2SQLService {
     private JdbcTemplate jdbcTemplate;
     
     @Autowired(required = false)
-    @Qualifier("openAiChatModel")
+//    @Qualifier("openAiChatModel")
+    @Qualifier("dashscopeChatModel")
     private ChatModel chatModel;
 
     private ChatClient chatClient;

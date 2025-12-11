@@ -1,7 +1,7 @@
 package org.example.smarttransportation.service;
 
-// import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions; // 原 DashScope 导入，已切换到 OpenAI
-import org.springframework.ai.openai.OpenAiChatOptions;
+ import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions; // 原 DashScope 导入，已切换到 OpenAI
+//import org.springframework.ai.openai.OpenAiChatOptions;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.smarttransportation.dto.ChartData;
 import org.example.smarttransportation.dto.ChatRequest;
@@ -64,18 +64,18 @@ public class AIAssistantService {
     @Autowired
     private MetadataCacheService metadataCacheService;
 
-    public AIAssistantService(@Qualifier("openAiChatModel") ChatModel chatModel) {
+    public AIAssistantService(@Qualifier("dashscopeChatModel")ChatModel chatModel) {
         // 构建ChatClient，设置专门的交通助手参数
         this.chatClient = ChatClient.builder(chatModel)
                 .defaultOptions(
-                        // DashScopeChatOptions.builder() // 原 DashScope 配置，已切换到 OpenAI
-                        //         .withTopP(0.8)
-                        //         .withTemperature(0.7)
-                        //         .build()
-                        OpenAiChatOptions.builder()
-                                .withTopP(0.8)
-                                .withTemperature(0.7)
-                                .build()
+                         DashScopeChatOptions.builder() // 原 DashScope 配置，已切换到 OpenAI
+                                 .withTopP(0.8)
+                                 .withTemperature(0.7)
+                                 .build()
+//                        OpenAiChatOptions.builder()
+//                                .withTopP(0.8)
+//                                .withTemperature(0.7)
+//                                .build()
                 )
                 .defaultFunctions("trafficQuery", "weatherQuery", "webSearch")
                 .defaultSystem("""

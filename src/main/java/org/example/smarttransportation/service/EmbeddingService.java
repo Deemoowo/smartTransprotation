@@ -20,7 +20,8 @@ import java.util.ArrayList;
 public class EmbeddingService {
     
     @Autowired(required = false)
-    @Qualifier("openAiEmbeddingModel")
+//    @Qualifier("openAiEmbeddingModel")
+    @Qualifier("dashscopeEmbeddingModel")
     private EmbeddingModel embeddingModel;
     
     /**
