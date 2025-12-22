@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Markdown 转换测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .test-input {
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #f8fafc;
+            padding: 10px;
+            width: 100%;
+            height: 200px;
+            margin-bottom: 20px;
+        }
+        .test-output {
+            background: #1e293b;
+            border: 1px solid #334155;
+            padding: 20px;
+            border-radius: 8px;
+            min-height: 200px;
+        }
+        .test-button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        
+        /* Markdown 样式 */
+        .test-output code {
+            background-color: rgba(110, 118, 129, 0.4);
+            padding: 0.2em 0.4em;
+            border-radius: 6px;
+            font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+            font-size: 0.85em;
+        }
+        
+        .test-output pre {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            padding: 16px;
+            overflow-x: auto;
+            margin: 16px 0;
+        }
+        
+        .test-output pre code {
+            background-color: transparent;
+            padding: 0;
+            border-radius: 0;
+            font-size: 0.85em;
+        }
+        
+        .test-output h1,
+        .test-output h2,
+        .test-output h3,
+        .test-output h4,
+        .test-output h5,
+        .test-output h6 {
+            margin: 16px 0 8px 0;
+            font-weight: 600;
+            line-height: 1.25;
+        }
+        
+        .test-output h1 {
+            font-size: 2em;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 0.3em;
+        }
+        
+        .test-output h2 {
+            font-size: 1.5em;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 0.3em;
+        }
+        
+        .test-output h3 {
+            font-size: 1.25em;
+        }
+        
+        .test-output ul,
+        .test-output ol {
+            padding-left: 2em;
+            margin: 8px 0;
+        }
+        
+        .test-output li {
+            margin: 4px 0;
+        }
+        
+        .test-output strong {
+            font-weight: 600;
+        }
+        
+        .test-output em {
+            font-style: italic;
+        }
+        
+        .test-output a {
+            color: #3b82f6;
+            text-decoration: none;
+        }
+        
+        .test-output a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>Markdown 转换功能测试</h1>
+        
+        <h2>测试输入</h2>
+        <textarea id="testInput" class="test-input" placeholder="在这里输入 Markdown 文本进行测试...">我需要查询2024年2月纽约曼哈顿区的交通事故数据。让我调用交通数据查询工具来获取相关信息。
+
+# 2024年2月交通事故数据分析
+
+根据交通数据查询，2024年2月纽约市共发生6,841起交通事故。以下是详细分析：
+
+## 事故概况
+- 总事故数量: 6,841起
+- 数据覆盖: 包含曼哈顿、布鲁克林、皇后区等多个行政区
+- 时间分布: 从2月1日开始的事故记录
+
+## 事故类型分析
+1. 车辆类型：
+   - 轿车(Sedan)是最常见的涉事车型
+   - 其他常见车型包括：出租车、皮卡、SUV等
+
+2. 事故严重程度：
+   - 大部分事故为轻微事故，无人员伤亡
+   - 部分事故涉及人员受伤，但死亡事故较少
+
+3. 受影响人群：
+   - 驾驶员受伤案例存在
+   - 行人和骑行者也有受伤情况
+   - 2月1日有一起涉及骑行者受伤的事故
+
+## 主要致因因素
+- 主要因素：驾驶员疏忽/分心、交通控制违规、超速行驶
+- 其他因素：车辆机械问题、未明示因素
+
+## 高发地点示例
+- 曼哈顿东126街与麦迪逊大道交口
+- 曼哈顿西100街
+- 皇后区Vanloon街与51大道交口
+
+## 建议
+1. 加强对分心驾驶的监管
+2. 在事故高发路段增设安全警示标识
+3. 针对骑行者安全加强交通教育
+
+需要更详细的特定区域或时段的分析，我可以进一步查询相关数据。</textarea>
+        
+        <button class="test-button" onclick="testMarkdown()">测试 Markdown 转换</button>
+        
+        <h2>转换结果</h2>
+        <div id="testOutput" class="test-output">
+            点击"测试 Markdown 转换"按钮查看结果...
+        </div>
+    </div>
+
+    <script>
+        // 格式化消息内容（支持Markdown语法）
+        function formatMessage(content) {
+            if (!content) return '';
+
+            let formatted = content;
+
+            // 先处理代码块，避免其内容被其他规则影响
+            const codeBlocks = [];
+            formatted = formatted.replace(/```([\s\S]*?)```/g, (match, code) => {
+                const placeholder = `__CODE_BLOCK_${codeBlocks.length}__`;
+                codeBlocks.push(`<pre><code>${escapeHtml(code)}</code></pre>`);
+                return placeholder;
+            });
+
+            // 处理行内代码
+            const inlineCodes = [];
+            formatted = formatted.replace(/`([^`]+)`/g, (match, code) => {
+                const placeholder = `__INLINE_CODE_${inlineCodes.length}__`;
+                inlineCodes.push(`<code>${escapeHtml(code)}</code>`);
+                return placeholder;
+            });
+
+            // 转义剩余的HTML特殊字符
+            formatted = escapeHtml(formatted);
+
+            // 处理标题 (必须在转义之后，因为我们需要输出HTML标签)
+            formatted = formatted.replace(/^######\s*(.*$)/gm, '<h6>$1</h6>');
+            formatted = formatted.replace(/^#####\s*(.*$)/gm, '<h5>$1</h5>');
+            formatted = formatted.replace(/^####\s*(.*$)/gm, '<h4>$1</h4>');
+            formatted = formatted.replace(/^###\s*(.*$)/gm, '<h3>$1</h3>');
+            formatted = formatted.replace(/^##\s*(.*$)/gm, '<h2>$1</h2>');
+            formatted = formatted.replace(/^#\s*(.*$)/gm, '<h1>$1</h1>');
+
+            // 处理粗体 **text**
+            formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+            // 处理斜体 *text*
+            formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+            // 处理无序列表 - item
+            formatted = formatted.replace(/^\s*-\s+(.*$)/gm, '<li>$1</li>');
+            formatted = formatted.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
+
+            // 处理有序列表 1. item
+            formatted = formatted.replace(/^\s*\d+\.\s+(.*$)/gm, '<li>$1</li>');
+            formatted = formatted.replace(/(<li>.*<\/li>)/gs, '<ol>$1</ol>');
+
+            // 处理链接 [text](url)
+            formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+
+            // 恢复代码块
+            codeBlocks.forEach((code, index) => {
+                formatted = formatted.replace(`__CODE_BLOCK_${index}__`, code);
+            });
+
+            // 恢复行内代码
+            inlineCodes.forEach((code, index) => {
+                formatted = formatted.replace(`__INLINE_CODE_${index}__`, code);
+            });
+
+            // 将换行符转换为HTML换行
+            formatted = formatted.replace(/\n/g, '<br>');
+
+            return formatted;
+        }
+
+        // HTML转义函数
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        function testMarkdown() {
+            const input = document.getElementById('testInput').value;
+            const output = document.getElementById('testOutput');
+            
+            console.log('原始输入:', input);
+            
+            const result = formatMessage(input);
+            
+            console.log('转换结果:', result);
+            
+            // 检查转换结果
+            let testResults = [];
+
+            // 检查是否还包含原始的 # 符号
+            if (result.includes('# ') || result.includes('## ') || result.includes('### ')) {
+                testResults.push('❌ 错误：标题没有被正确转换，仍然包含原始的 # 符号');
+            } else {
+                testResults.push('✅ 成功：标题已被正确转换，不再包含原始的 # 符号');
+            }
+
+            // 检查是否包含 HTML 标题标签
+            if (result.includes('<h1>') && result.includes('<h2>')) {
+                testResults.push('✅ 成功：检测到 HTML 标题标签 <h1> 和 <h2>');
+            } else {
+                testResults.push('❌ 错误：没有检测到 HTML 标题标签');
+            }
+
+            // 检查粗体转换
+            if (result.includes('<strong>')) {
+                testResults.push('✅ 成功：粗体文本已正确转换');
+            } else {
+                testResults.push('❌ 错误：粗体文本转换失败');
+            }
+
+            // 显示测试结果
+            const testResultsHtml = testResults.map(result => `<div style="margin: 5px 0; padding: 5px; background: rgba(255,255,255,0.1); border-radius: 3px;">${result}</div>`).join('');
+
+            output.innerHTML = `
+                <div style="border-bottom: 1px solid #334155; padding-bottom: 10px; margin-bottom: 10px;">
+                    <h3>测试结果：</h3>
+                    ${testResultsHtml}
+                </div>
+                <div>
+                    <h3>渲染效果：</h3>
+                    ${result}
+                </div>
+            `;
+        }
+
+        // 页面加载时自动测试
+        window.onload = function() {
+            testMarkdown();
+        };
+    </script>
+</body>
+</html>

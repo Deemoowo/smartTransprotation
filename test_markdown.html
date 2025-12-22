@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Markdown测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+        .message-content {
+            max-width: 800px;
+            padding: 16px 24px;
+            border-radius: 12px;
+            font-size: 1rem;
+            line-height: 1.6;
+            background: #1e293b;
+        }
+        
+        /* Markdown 样式 */
+        .message-content code {
+            background-color: rgba(110, 118, 129, 0.4);
+            padding: 0.2em 0.4em;
+            border-radius: 6px;
+            font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+            font-size: 0.85em;
+        }
+        
+        .message-content pre {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            padding: 16px;
+            overflow-x: auto;
+            margin: 16px 0;
+        }
+        
+        .message-content pre code {
+            background-color: transparent;
+            padding: 0;
+            border-radius: 0;
+            font-size: 0.85em;
+        }
+        
+        .message-content h1,
+        .message-content h2,
+        .message-content h3,
+        .message-content h4,
+        .message-content h5,
+        .message-content h6 {
+            margin: 16px 0 8px 0;
+            font-weight: 600;
+            line-height: 1.25;
+        }
+        
+        .message-content h1 {
+            font-size: 2em;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 0.3em;
+        }
+        
+        .message-content h2 {
+            font-size: 1.5em;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 0.3em;
+        }
+        
+        .message-content h3 {
+            font-size: 1.25em;
+        }
+        
+        .message-content ul,
+        .message-content ol {
+            padding-left: 2em;
+            margin: 8px 0;
+        }
+        
+        .message-content li {
+            margin: 4px 0;
+        }
+        
+        .message-content strong {
+            font-weight: 600;
+        }
+        
+        .message-content em {
+            font-style: italic;
+        }
+        
+        .message-content a {
+            color: #3b82f6;
+            text-decoration: none;
+        }
+        
+        .message-content a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <h1>Markdown解析测试</h1>
+    
+    <div class="message-content" id="testContent"></div>
+
+    <script>
+        // 格式化消息内容（支持Markdown语法）
+        function formatMessage(content) {
+            if (!content) return '';
+            
+            // 转义HTML特殊字符
+            let formatted = escapeHtml(content);
+            
+            // 处理代码块 ```code```
+            formatted = formatted.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+            
+            // 处理行内代码 `code`
+            formatted = formatted.replace(/`([^`]+)`/g, '<code>$1</code>');
+            
+            // 处理粗体 **text**
+            formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            
+            // 处理斜体 *text*
+            formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>');
+            
+            // 处理标题 # Header
+            formatted = formatted.replace(/^###### (.*$)/gm, '<h6>$1</h6>');
+            formatted = formatted.replace(/^##### (.*$)/gm, '<h5>$1</h5>');
+            formatted = formatted.replace(/^#### (.*$)/gm, '<h4>$1</h4>');
+            formatted = formatted.replace(/^### (.*$)/gm, '<h3>$1</h3>');
+            formatted = formatted.replace(/^## (.*$)/gm, '<h2>$1</h2>');
+            formatted = formatted.replace(/^# (.*$)/gm, '<h1>$1</h1>');
+            
+            // 处理无序列表 - item
+            formatted = formatted.replace(/^\s*-\s+(.*$)/gm, '<li>$1</li>');
+            formatted = formatted.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
+            
+            // 处理有序列表 1. item
+            formatted = formatted.replace(/^\s*\d+\.\s+(.*$)/gm, '<li>$1</li>');
+            formatted = formatted.replace(/(<li>.*<\/li>)/gs, '<ol>$1</ol>');
+            
+            // 处理链接 [text](url)
+            formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+            
+            // 将换行符转换为HTML换行
+            formatted = formatted.replace(/\n/g, '<br>');
+            
+            return formatted;
+        }
+        
+        // HTML转义函数
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+        
+        // 测试内容
+        const testContent = `
+# 标题1
+## 标题2
+### 标题3
+
+这是**粗体文本**，这是*斜体文本*。
+
+这是一个[链接](https://www.example.com)。
+
+- 无序列表项1
+- 无序列表项2
+- 无序列表项3
+
+1. 有序列表项1
+2. 有序列表项2
+3. 有序列表项3
+
+这是行内代码 \`console.log('Hello World');\` 的示例。
+
+\`\`\`
+function helloWorld() {
+    console.log('Hello World');
+    return true;
+}
+\`\`\`
+        `;
+        
+        // 显示格式化后的内容
+        document.getElementById('testContent').innerHTML = formatMessage(testContent);
+    </script>
+</body>
+</html>

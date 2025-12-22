@@ -612,6 +612,171 @@ public class TrafficDataAnalysisService {
     }
 
     /**
+     * 查询指定日期的拥堵指数和事故总量
+     *
+     * @param date 查询日期
+     * @return 拥堵指数和事故总量分析结果
+     */
+    public CongestionAnalysis analyzeCongestionAndAccidents(LocalDate date) {
+        CongestionAnalysis analysis = new CongestionAnalysis();
+        analysis.setDate(date);
+
+        try {
+            // 查询当天的事故总量
+            List<TrafficAccident> dayAccidents = trafficAccidentRepository.findByDateRange(date, date);
+            analysis.setAccidentCount(dayAccidents.size());
+
+            // 计算拥堵指数（基于多个因素的综合评估）
+            double congestionIndex = calculateCongestionIndex(date, dayAccidents);
+            analysis.setCongestionIndex(congestionIndex);
+            analysis.setCongestionLevel(getCongestionLevel(congestionIndex));
+
+            // 分析事故分布
+            Map<String, Long> accidentDistribution = dayAccidents.stream()
+                .collect(Collectors.groupingBy(
+                    accident -> {
+                        if (accident.getCrashTime() != null) {
+                            try {
+                                String[] timeParts = accident.getCrashTime().split(":");
+                                int hour = Integer.parseInt(timeParts[0]);
+                                if (hour >= 7 && hour <= 9) {
+                                    return "早高峰(7-9)";
+                                }
+                                if (hour >= 17 && hour <= 19) {
+                                    return "晚高峰(17-19)";
+                                }
+                                if (hour >= 10 && hour <= 16) {
+                                    return "平峰(10-16)";
+                                }
+                                return "其他时段";
+                            } catch (Exception e) {
+                                return "未知时段";
+                            }
+                        }
+                        return "未知时段";
+                    },
+                    Collectors.counting()
+                ));
+            analysis.setAccidentTimeDistribution(accidentDistribution);
+
+            // 分析严重事故
+            long severeAccidents = dayAccidents.stream()
+                .filter(TrafficAccident::isSevere)
+                .count();
+            analysis.setSevereAccidentCount((int) severeAccidents);
+
+            // 计算伤亡统计
+            int totalInjured = dayAccidents.stream()
+                .mapToInt(TrafficAccident::getPersonsInjured)
+                .sum();
+            int totalKilled = dayAccidents.stream()
+                .mapToInt(TrafficAccident::getPersonsKilled)
+                .sum();
+            analysis.setTotalInjured(totalInjured);
+            analysis.setTotalKilled(totalKilled);
+
+        } catch (Exception e) {
+            logger.error("拥堵指数和事故分析失败: {}", e.getMessage());
+            analysis.setCongestionIndex(0.0);
+            analysis.setCongestionLevel("数据不可用");
+        }
+
+        return analysis;
+    }
+
+    /**
+     * 计算拥堵指数（0-100分）
+     * 基于事故数量、时间分布、严重程度等因素综合计算
+     */
+    private double calculateCongestionIndex(LocalDate date, List<TrafficAccident> accidents) {
+        double baseScore = 0.0;
+
+        // 1. 基于事故数量的评分（最高30分）
+        int accidentCount = accidents.size();
+        double accidentScore = Math.min(accidentCount * 2.0, 30.0);
+        baseScore += accidentScore;
+
+        // 2. 基于高峰时段事故比例的评分（最高25分）
+        long rushHourAccidents = accidents.stream()
+            .filter(accident -> {
+                if (accident.getCrashTime() != null) {
+                    try {
+                        String[] timeParts = accident.getCrashTime().split(":");
+                        int hour = Integer.parseInt(timeParts[0]);
+                        return (hour >= 7 && hour <= 9) || (hour >= 17 && hour <= 19);
+                    } catch (Exception e) {
+                        return false;
+                    }
+                }
+                return false;
+            })
+            .count();
+
+        if (accidentCount > 0) {
+            double rushHourRatio = (double) rushHourAccidents / accidentCount;
+            baseScore += rushHourRatio * 25.0;
+        }
+
+        // 3. 基于严重事故比例的评分（最高20分）
+        long severeAccidents = accidents.stream()
+            .filter(TrafficAccident::isSevere)
+            .count();
+
+        if (accidentCount > 0) {
+            double severeRatio = (double) severeAccidents / accidentCount;
+            baseScore += severeRatio * 20.0;
+        }
+
+        // 4. 基于周末/工作日的调整（最高15分）
+        java.time.DayOfWeek dayOfWeek = date.getDayOfWeek();
+        if (dayOfWeek == java.time.DayOfWeek.MONDAY || dayOfWeek == java.time.DayOfWeek.FRIDAY) {
+            baseScore += 10.0; // 周一周五通常更拥堵
+        } else if (dayOfWeek == java.time.DayOfWeek.SATURDAY || dayOfWeek == java.time.DayOfWeek.SUNDAY) {
+            baseScore += 5.0; // 周末相对较少
+        } else {
+            baseScore += 8.0; // 周二到周四
+        }
+
+        // 5. 基于特殊日期的调整（最高10分）
+        if (isSpecialDate(date)) {
+            baseScore += 10.0;
+        }
+
+        return Math.min(baseScore, 100.0);
+    }
+
+    /**
+     * 判断是否为特殊日期（节假日、重要事件日等）
+     */
+    private boolean isSpecialDate(LocalDate date) {
+        // 情人节
+        if (date.getMonthValue() == 2 && date.getDayOfMonth() == 14) {
+            return true;
+        }
+        // 可以添加更多特殊日期判断
+        return false;
+    }
+
+    /**
+     * 根据拥堵指数获取拥堵等级描述
+     */
+    private String getCongestionLevel(double index) {
+        if (index >= 80) {
+            return "严重拥堵";
+        }
+        if (index >= 60) {
+            return "中度拥堵";
+        }
+        if (index >= 40) {
+            return "轻度拥堵";
+        }
+        if (index >= 20) {
+            return "基本畅通";
+        }
+        return "畅通";
+    }
+
+    /**
      * 检查查询是否包含关键词
      */
     private boolean containsKeywords(String query, String... keywords) {
@@ -621,5 +786,46 @@ public class TrafficDataAnalysisService {
             }
         }
         return false;
+    }
+
+    /**
+     * 拥堵分析结果
+     */
+    public static class CongestionAnalysis {
+        private LocalDate date;
+        private double congestionIndex;
+        private String congestionLevel;
+        private int accidentCount;
+        private int severeAccidentCount;
+        private int totalInjured;
+        private int totalKilled;
+        private Map<String, Long> accidentTimeDistribution;
+
+        // Getters and Setters
+        public LocalDate getDate() { return date; }
+        public void setDate(LocalDate date) { this.date = date; }
+
+        public double getCongestionIndex() { return congestionIndex; }
+        public void setCongestionIndex(double congestionIndex) { this.congestionIndex = congestionIndex; }
+
+        public String getCongestionLevel() { return congestionLevel; }
+        public void setCongestionLevel(String congestionLevel) { this.congestionLevel = congestionLevel; }
+
+        public int getAccidentCount() { return accidentCount; }
+        public void setAccidentCount(int accidentCount) { this.accidentCount = accidentCount; }
+
+        public int getSevereAccidentCount() { return severeAccidentCount; }
+        public void setSevereAccidentCount(int severeAccidentCount) { this.severeAccidentCount = severeAccidentCount; }
+
+        public int getTotalInjured() { return totalInjured; }
+        public void setTotalInjured(int totalInjured) { this.totalInjured = totalInjured; }
+
+        public int getTotalKilled() { return totalKilled; }
+        public void setTotalKilled(int totalKilled) { this.totalKilled = totalKilled; }
+
+        public Map<String, Long> getAccidentTimeDistribution() { return accidentTimeDistribution; }
+        public void setAccidentTimeDistribution(Map<String, Long> accidentTimeDistribution) {
+            this.accidentTimeDistribution = accidentTimeDistribution;
+        }
     }
 }

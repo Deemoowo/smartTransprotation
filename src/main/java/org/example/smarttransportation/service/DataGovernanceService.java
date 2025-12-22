@@ -348,6 +348,97 @@ public class DataGovernanceService {
     }
 
     /**
+     * 分析指定时间段内事故最高发的前3条街道及其主要致因
+     *
+     * @param startDate 开始日期
+     * @param endDate 结束日期
+     * @return 街道事故分析结果
+     */
+    public StreetAccidentAnalysis analyzeTop3AccidentStreets(LocalDate startDate, LocalDate endDate) {
+        StreetAccidentAnalysis analysis = new StreetAccidentAnalysis();
+
+        // 获取按街道统计的事故数量
+        List<Object[]> streetAccidentCounts = trafficAccidentRepository.countAccidentsByStreet(startDate, endDate);
+
+        // 取前3条街道
+        List<StreetAccidentInfo> top3Streets = new ArrayList<>();
+        int count = 0;
+        for (Object[] row : streetAccidentCounts) {
+            if (count >= 3) {
+                break;
+            }
+
+            String streetName = (String) row[0];
+            Long accidentCount = (Long) row[1];
+
+            // 分析该街道的事故致因
+            List<TrafficAccident> streetAccidents = trafficAccidentRepository.findByDateRange(startDate, endDate)
+                .stream()
+                .filter(accident -> streetName.equals(accident.getOnStreetName()))
+                .collect(Collectors.toList());
+
+            Map<String, Long> causeDistribution = analyzeAccidentCauses(streetAccidents);
+
+            StreetAccidentInfo streetInfo = new StreetAccidentInfo();
+            streetInfo.setStreetName(streetName);
+            streetInfo.setAccidentCount(accidentCount.intValue());
+            streetInfo.setCauseDistribution(causeDistribution);
+            streetInfo.setMainCause(getMainCause(causeDistribution));
+
+            top3Streets.add(streetInfo);
+            count++;
+        }
+
+        analysis.setTop3Streets(top3Streets);
+        analysis.setAnalysisPeriod(startDate + " 至 " + endDate);
+
+        return analysis;
+    }
+
+    /**
+     * 分析事故致因分布
+     */
+    private Map<String, Long> analyzeAccidentCauses(List<TrafficAccident> accidents) {
+        Map<String, Long> causeDistribution = new HashMap<>();
+
+        for (TrafficAccident accident : accidents) {
+            // 分析所有致因因素
+            String[] factors = {
+                accident.getContributingFactorVehicle1(),
+                accident.getContributingFactorVehicle2(),
+                accident.getContributingFactorVehicle3(),
+                accident.getContributingFactorVehicle4(),
+                accident.getContributingFactorVehicle5()
+            };
+
+            for (String factor : factors) {
+                if (factor != null && !factor.trim().isEmpty() &&
+                    !factor.equalsIgnoreCase("Unspecified") &&
+                    !factor.equalsIgnoreCase("Unknown")) {
+                    causeDistribution.merge(factor, 1L, Long::sum);
+                }
+            }
+        }
+
+        // 如果没有有效的致因数据，返回默认分类
+        if (causeDistribution.isEmpty()) {
+            causeDistribution.put("数据不完整", (long) accidents.size());
+        }
+
+        return causeDistribution;
+    }
+
+    /**
+     * 获取主要致因
+     */
+    private String getMainCause(Map<String, Long> causeDistribution) {
+        return causeDistribution.entrySet().stream()
+            .max(Map.Entry.comparingByValue())
+            .map(Map.Entry::getKey)
+            .orElse("未知");
+    }
+
+    /**
      * 获取参考案例
      */
     private List<String> getReferenceCases(String location) {
@@ -457,5 +548,43 @@ public class DataGovernanceService {
 
         public List<String> getReferenceCases() { return referenceCases; }
         public void setReferenceCases(List<String> referenceCases) { this.referenceCases = referenceCases; }
+    }
+
+    /**
+     * 街道事故分析结果
+     */
+    public static class StreetAccidentAnalysis {
+        private List<StreetAccidentInfo> top3Streets;
+        private String analysisPeriod;
+
+        // Getters and Setters
+        public List<StreetAccidentInfo> getTop3Streets() { return top3Streets; }
+        public void setTop3Streets(List<StreetAccidentInfo> top3Streets) { this.top3Streets = top3Streets; }
+
+        public String getAnalysisPeriod() { return analysisPeriod; }
+        public void setAnalysisPeriod(String analysisPeriod) { this.analysisPeriod = analysisPeriod; }
+    }
+
+    /**
+     * 街道事故信息
+     */
+    public static class StreetAccidentInfo {
+        private String streetName;
+        private int accidentCount;
+        private Map<String, Long> causeDistribution;
+        private String mainCause;
+
+        // Getters and Setters
+        public String getStreetName() { return streetName; }
+        public void setStreetName(String streetName) { this.streetName = streetName; }
+
+        public int getAccidentCount() { return accidentCount; }
+        public void setAccidentCount(int accidentCount) { this.accidentCount = accidentCount; }
+
+        public Map<String, Long> getCauseDistribution() { return causeDistribution; }
+        public void setCauseDistribution(Map<String, Long> causeDistribution) { this.causeDistribution = causeDistribution; }
+
+        public String getMainCause() { return mainCause; }
+        public void setMainCause(String mainCause) { this.mainCause = mainCause; }
     }
 }

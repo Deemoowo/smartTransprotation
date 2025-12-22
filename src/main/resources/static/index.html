@@ -327,6 +327,111 @@
             background: rgba(6, 182, 212, 0.1);
             color: var(--glow-color);
         }
+
+        /* Markdown 样式 */
+        .message-content code {
+            background-color: rgba(110, 118, 129, 0.4);
+            padding: 0.2em 0.4em;
+            border-radius: 6px;
+            font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+            font-size: 0.85em;
+        }
+
+        .message-content pre {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            padding: 16px;
+            overflow-x: auto;
+            margin: 16px 0;
+        }
+
+        .message-content pre code {
+            background-color: transparent;
+            padding: 0;
+            border-radius: 0;
+            font-size: 0.85em;
+        }
+
+        .message-content h1,
+        .message-content h2,
+        .message-content h3,
+        .message-content h4,
+        .message-content h5,
+        .message-content h6 {
+            margin: 16px 0 8px 0;
+            font-weight: 600;
+            line-height: 1.25;
+        }
+
+        .message-content h1 {
+            font-size: 1.2em;
+            font-weight: 600;
+            margin: 8px 0 4px 0;
+            color: #06b6d4;
+        }
+
+        .message-content h2 {
+            font-size: 1.1em;
+            font-weight: 600;
+            margin: 8px 0 4px 0;
+            color: #06b6d4;
+        }
+
+        .message-content h3 {
+            font-size: 1.05em;
+            font-weight: 600;
+            margin: 8px 0 4px 0;
+            color: #06b6d4;
+        }
+
+        .message-content h4 {
+            font-size: 1.02em;
+            font-weight: 600;
+            margin: 8px 0 4px 0;
+            color: #06b6d4;
+        }
+
+        .message-content h5 {
+            font-size: 1.01em;
+            font-weight: 600;
+            margin: 8px 0 4px 0;
+            color: #06b6d4;
+        }
+
+        .message-content h6 {
+            font-size: 1em;
+            font-weight: 600;
+            margin: 8px 0 4px 0;
+            color: #06b6d4;
+        }
+
+        .message-content ul,
+        .message-content ol {
+            padding-left: 2em;
+            margin: 8px 0;
+        }
+
+        .message-content li {
+            margin: 4px 0;
+        }
+
+        .message-content strong {
+            font-weight: 600;
+        }
+
+        .message-content em {
+            font-style: italic;
+        }
+
+        .message-content a {
+            color: #3b82f6;
+            text-decoration: none;
+        }
+
+        .message-content a:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
@@ -421,29 +526,43 @@
         ensureChartModal();
     });
 
+        // 创建带超时的fetch请求
+        function fetchWithTimeout(url, options = {}, timeout = 30000) {
+            return Promise.race([
+                fetch(url, options),
+                new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('请求超时')), timeout)
+                )
+            ]);
+        }
+
         // 初始化会话
         async function initializeSession() {
             try {
-                const response = await fetch('/api/chat/session/new', {
+                const response = await fetchWithTimeout('/api/chat/session/new', {
                     method: 'POST'
-                });
+                }, 10000); // 10秒超时
 
                 if (response.ok) {
                     currentSessionId = await response.text();
                     document.getElementById('sessionId').textContent = `会话ID: ${currentSessionId.substring(0, 8)}...`;
                 } else {
-                    throw new Error('创建会话失败');
+                    throw new Error(`创建会话失败: ${response.status} ${response.statusText}`);
                 }
             } catch (error) {
                 console.error('初始化会话失败:', error);
-                showError('无法连接到AI助手服务，请检查网络连接或稍后重试。');
+                if (error.message === '请求超时') {
+                    showError('连接超时，请检查网络连接或稍后重试。');
+                } else {
+                    showError('无法连接到AI助手服务，请检查网络连接或稍后重试。');
+                }
             }
         }
 
         // 加载AI助手介绍
         async function loadIntroduction() {
             try {
-                const response = await fetch('/api/chat/intro');
+                const response = await fetchWithTimeout('/api/chat/intro', {}, 10000); // 10秒超时
                 if (response.ok) {
                     const data = await response.json();
                     if (data.success) {
@@ -460,6 +579,9 @@
                 }
             } catch (error) {
                 console.error('加载介绍失败:', error);
+                if (error.message === '请求超时') {
+                    showError('加载介绍超时，但您仍可以正常使用对话功能。');
+                }
             }
         }
 
@@ -486,13 +608,13 @@
             // 创建助手消息占位符
             const assistantMessageDiv = addMessage('assistant', '', new Date());
             const contentDiv = assistantMessageDiv.querySelector('.message-content');
-            
+
             // 准备流式输出容器结构
             contentDiv.innerHTML = '';
             const thoughtContainer = document.createElement('div');
             thoughtContainer.className = 'thought-container';
             contentDiv.appendChild(thoughtContainer);
-            
+
             const textContainer = document.createElement('div');
             textContainer.className = 'text-content';
             contentDiv.appendChild(textContainer);
@@ -500,6 +622,14 @@
             let fullContent = '';
 
             try {
+                // 为流式请求创建超时控制
+                const timeoutId = setTimeout(() => {
+                    if (currentAbortController) {
+                        currentAbortController.abort();
+                        textContainer.innerHTML = '请求超时，请稍后重试。如果问题持续存在，请尝试刷新页面。';
+                    }
+                }, 120000); // 2分钟超时，适合长时间的AI处理
+
                 const response = await fetch('/api/chat/stream', {
                     method: 'POST',
                     headers: {
@@ -515,6 +645,9 @@
                     signal: currentAbortController.signal
                 });
 
+                // 清除超时定时器
+                clearTimeout(timeoutId);
+
                 if (!response.ok) {
                     throw new Error('Network response was not ok');
                 }
@@ -527,13 +660,13 @@
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
-                    
+
                     const chunk = decoder.decode(value, { stream: true });
                     buffer += chunk;
-                    
+
                     const lines = buffer.split('\n');
                     buffer = lines.pop(); // Keep the last incomplete line
-                    
+
                     for (const line of lines) {
                         if (line.startsWith('data:')) {
                             const content = line.substring(5);
@@ -550,16 +683,16 @@
                             }
                         }
                     }
-                    
+
                     textContainer.innerHTML = formatMessage(fullContent);
-                    
+
                     // 如果收到元数据，渲染附加信息
                     if (metadataObj) {
                         renderMetadata(metadataObj, contentDiv);
                         // 防止重复渲染
-                        metadataObj = null; 
+                        metadataObj = null;
                     }
-                    
+
                     // Auto scroll
                     const messagesContainer = document.getElementById('chatMessages');
                     messagesContainer.scrollTop = messagesContainer.scrollHeight;
@@ -572,7 +705,22 @@
                     textContainer.innerHTML = formatMessage(fullContent);
                 } else {
                     console.error('发送消息失败:', error);
-                    textContainer.innerHTML = '抱歉，网络连接出现问题，请稍后重试。';
+                    let errorMessage = '抱歉，网络连接出现问题，请稍后重试。';
+
+                    // 根据不同的错误类型提供更具体的错误信息
+                    if (error.message === '请求超时') {
+                        errorMessage = '请求处理时间过长，已自动停止。请尝试简化问题或稍后重试。';
+                    } else if (error.message.includes('Failed to fetch')) {
+                        errorMessage = '无法连接到服务器，请检查网络连接或稍后重试。';
+                    } else if (error.message.includes('NetworkError')) {
+                        errorMessage = '网络错误，请检查您的网络连接。';
+                    } else if (error.message.includes('500')) {
+                        errorMessage = '服务器内部错误，请稍后重试或联系管理员。';
+                    } else if (error.message.includes('404')) {
+                        errorMessage = '请求的服务不存在，请刷新页面重试。';
+                    }
+
+                    textContainer.innerHTML = errorMessage;
                 }
             } finally {
                 currentAbortController = null;
@@ -774,10 +922,93 @@
             return messageDiv;
         }
 
-        // 格式化消息内容
+        // 格式化消息内容（强制转换标题符号）
         function formatMessage(content) {
+            if (!content) return '';
+
+            let formatted = content;
+
+            // 先处理代码块，避免其内容被其他规则影响
+            const codeBlocks = [];
+            formatted = formatted.replace(/```([\s\S]*?)```/g, (match, code) => {
+                const placeholder = `__CODE_BLOCK_${codeBlocks.length}__`;
+                codeBlocks.push(`<pre><code>${escapeHtml(code)}</code></pre>`);
+                return placeholder;
+            });
+
+            // 处理行内代码
+            const inlineCodes = [];
+            formatted = formatted.replace(/`([^`]+)`/g, (match, code) => {
+                const placeholder = `__INLINE_CODE_${inlineCodes.length}__`;
+                inlineCodes.push(`<code>${escapeHtml(code)}</code>`);
+                return placeholder;
+            });
+
+            // 强制替换标题符号为中文数字格式
+            formatted = formatted.replace(/^######\s*(.*$)/gm, '<h6>六、$1</h6>');
+            formatted = formatted.replace(/^#####\s*(.*$)/gm, '<h5>五、$1</h5>');
+            formatted = formatted.replace(/^####\s*(.*$)/gm, '<h4>四、$1</h4>');
+            formatted = formatted.replace(/^###\s*(.*$)/gm, '<h3>三、$1</h3>');
+            formatted = formatted.replace(/^##\s*(.*$)/gm, '<h2>二、$1</h2>');
+            formatted = formatted.replace(/^#\s*(.*$)/gm, '<h1>一、$1</h1>');
+
+            // 强制替换任何剩余的标题符号（防止遗漏）
+            formatted = formatted.replace(/######\s*/g, '六、');
+            formatted = formatted.replace(/#####\s*/g, '五、');
+            formatted = formatted.replace(/####\s*/g, '四、');
+            formatted = formatted.replace(/###\s*/g, '三、');
+            formatted = formatted.replace(/##\s*/g, '二、');
+            formatted = formatted.replace(/#\s*/g, '一、');
+
+            // 转义剩余的HTML特殊字符
+            formatted = escapeHtml(formatted);
+
+            // 恢复HTML标题标签
+            formatted = formatted.replace(/&lt;h([1-6])&gt;(.*?)&lt;\/h\1&gt;/g, '<h$1>$2</h$1>');
+
+            // 处理粗体 **text**
+            formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+            // 处理斜体 *text*
+            formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+            // 处理无序列表 - item
+            formatted = formatted.replace(/^\s*-\s+(.*$)/gm, '<li>$1</li>');
+            formatted = formatted.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
+
+            // 处理有序列表 1. item
+            formatted = formatted.replace(/^\s*\d+\.\s+(.*$)/gm, '<li>$1</li>');
+            formatted = formatted.replace(/(<li>.*<\/li>)/gs, '<ol>$1</ol>');
+
+            // 处理链接 [text](url)
+            formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+
+            // 恢复代码块
+            codeBlocks.forEach((code, index) => {
+                formatted = formatted.replace(`__CODE_BLOCK_${index}__`, code);
+            });
+
+            // 恢复行内代码
+            inlineCodes.forEach((code, index) => {
+                formatted = formatted.replace(`__INLINE_CODE_${index}__`, code);
+            });
+
             // 将换行符转换为HTML换行
-            return content.replace(/\n/g, '<br>');
+            formatted = formatted.replace(/\n/g, '<br>');
+
+            return formatted;
+        }
+
+        // HTML转义函数
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
         }
 
         function renderChart(canvas, chart, isModal = false) {
@@ -924,10 +1155,9 @@
                 '<': '&lt;',
                 '>': '&gt;',
                 '"': '&quot;',
-                "'": '&#039;',
-                '\n': '\\n'
+                "'": '&#039;'
             };
-            return text.replace(/[&<>"'\n]/g, m => map[m]);
+            return text.replace(/[&<>"']/g, m => map[m]);
         }
 
         // 开始新会话

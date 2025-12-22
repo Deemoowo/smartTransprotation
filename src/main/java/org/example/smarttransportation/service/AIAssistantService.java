@@ -50,6 +50,9 @@ public class AIAssistantService {
     private RiskWarningService riskWarningService;
 
     @Autowired
+    private DateTimeParserService dateTimeParserService;
+
+    @Autowired
     private RAGService ragService;
 
     @Autowired
@@ -281,49 +284,99 @@ public class AIAssistantService {
     }
 
     /**
-     * 处理事前主动风险预警场景
+     * 处理事前主动风险预警场景（支持日期解析和多数据源）
      */
     private ChatResponse handleProactiveWarningScenario(ChatRequest request, String sessionId, long startTime) {
         try {
+            // 从用户输入中解析日期时间
+            java.time.LocalDateTime targetDateTime = dateTimeParserService.parseDateTime(request.getMessage());
+
+            // 确定数据源策略
+            boolean useNetworkSearch = dateTimeParserService.shouldUseNetworkSearch(targetDateTime);
+
+            // 如果没有解析到日期，使用当前时间并启用网络搜索
+            if (targetDateTime == null) {
+                targetDateTime = java.time.LocalDateTime.now();
+                useNetworkSearch = true;
+            }
+
+            // 记录数据源选择日志
+            logger.info("风险预警请求 - 目标时间: {}, 使用网络搜索: {}", targetDateTime, useNetworkSearch);
+
             // 调用风险预警服务生成风险预警报告
-            // 这里使用当前时间作为目标时间，实际应用中可以根据用户请求解析具体时间
-            java.time.LocalDateTime targetDateTime = java.time.LocalDateTime.now();
             org.example.smarttransportation.dto.RiskWarningReport riskReport =
-                riskWarningService.generateRiskWarning(targetDateTime);
+                riskWarningService.generateRiskWarning(targetDateTime, useNetworkSearch);
 
             // 构建响应消息
             StringBuilder responseMessage = new StringBuilder();
-            responseMessage.append("【T-Agent 风险预警报告】\n\n");
-            responseMessage.append("风险等级: ").append(riskReport.getRiskLevel()).append("\n");
-            responseMessage.append("风险类型: ").append(riskReport.getRiskType()).append("\n");
-            responseMessage.append("时间窗口: ").append(riskReport.getTimeWindow()).append("\n");
-            responseMessage.append("影响区域: ").append(riskReport.getAffectedArea()).append("\n\n");
+            responseMessage.append("【T-Agent 智能风险预警报告】\n\n");
 
-            responseMessage.append("【风险分析】\n");
-            org.example.smarttransportation.dto.RiskWarningReport.RiskAnalysis riskAnalysis = riskReport.getRiskAnalysis();
-            responseMessage.append("综合风险评分: ").append(riskAnalysis.getOverallRiskScore()).append("\n");
-            responseMessage.append("风险因子: ").append(riskAnalysis.getRiskFactors()).append("\n\n");
-
-            responseMessage.append("【高风险区域】\n");
-            if (riskReport.getHighRiskZones() != null && !riskReport.getHighRiskZones().isEmpty()) {
-                for (org.example.smarttransportation.dto.RiskWarningReport.HighRiskZone zone : riskReport.getHighRiskZones()) {
-                    responseMessage.append("- ").append(zone.getLocation()).append(" (").append(zone.getRiskLevel()).append(")\n");
-                    responseMessage.append("  风险因素: ").append(zone.getRiskFactors()).append("\n");
-                    responseMessage.append("  建议措施: ").append(String.join(", ", zone.getDeploymentSuggestions())).append("\n\n");
-                }
+            // 添加数据源说明
+            if (useNetworkSearch) {
+                responseMessage.append("📡 数据来源: 实时网络搜索 + 历史数据分析\n");
             } else {
-                responseMessage.append("暂无高风险区域。\n\n");
+                responseMessage.append("📊 数据来源: 历史数据库分析\n");
             }
 
-            responseMessage.append("【建议措施】\n");
+            responseMessage.append("🕒 分析时间: ").append(riskReport.getTimeWindow()).append("\n");
+            responseMessage.append("📍 影响区域: ").append(riskReport.getAffectedArea()).append("\n");
+            responseMessage.append("⚠️ 风险等级: ").append(riskReport.getRiskLevel()).append("\n");
+            responseMessage.append("🔍 风险类型: ").append(riskReport.getRiskType()).append("\n\n");
+
+            // 风险分析详情
+            responseMessage.append("【📈 综合风险分析】\n");
+            org.example.smarttransportation.dto.RiskWarningReport.RiskAnalysis riskAnalysis = riskReport.getRiskAnalysis();
+            responseMessage.append("• 综合风险评分: ").append(riskAnalysis.getOverallRiskScore()).append("/100\n");
+            responseMessage.append("• 主要风险因子: ").append(riskAnalysis.getRiskFactors()).append("\n\n");
+
+            // 详细风险分解
+            if (riskAnalysis.getWeatherRisk() != null) {
+                responseMessage.append("🌤️ 天气风险 (").append(riskAnalysis.getWeatherRisk().getRiskScore()).append("分): ");
+                responseMessage.append(riskAnalysis.getWeatherRisk().getWeatherDescription()).append("\n");
+            }
+
+            if (riskAnalysis.getTrafficRisk() != null) {
+                responseMessage.append("🚗 交通风险 (").append(riskAnalysis.getTrafficRisk().getRiskScore()).append("分): ");
+                responseMessage.append(riskAnalysis.getTrafficRisk().getTrafficPattern()).append("\n");
+            }
+
+            if (riskAnalysis.getEventRisk() != null) {
+                responseMessage.append("🎪 事件风险 (").append(riskAnalysis.getEventRisk().getRiskScore()).append("分): ");
+                responseMessage.append(riskAnalysis.getEventRisk().getEventTypes()).append("\n\n");
+            }
+
+            // 高风险区域
+            responseMessage.append("【🚨 重点关注区域】\n");
+            if (riskReport.getHighRiskZones() != null && !riskReport.getHighRiskZones().isEmpty()) {
+                for (org.example.smarttransportation.dto.RiskWarningReport.HighRiskZone zone : riskReport.getHighRiskZones()) {
+                    responseMessage.append("📍 ").append(zone.getLocation()).append(" (").append(zone.getRiskLevel()).append(")\n");
+                    responseMessage.append("   风险因素: ").append(zone.getRiskFactors()).append("\n");
+                    responseMessage.append("   建议措施: ").append(String.join(", ", zone.getDeploymentSuggestions())).append("\n\n");
+                }
+            } else {
+                responseMessage.append("✅ 当前暂无特别需要关注的高风险区域\n\n");
+            }
+
+            // 应对建议
+            responseMessage.append("【💡 应对建议】\n");
             if (riskReport.getRecommendations() != null && !riskReport.getRecommendations().isEmpty()) {
                 for (int i = 0; i < riskReport.getRecommendations().size(); i++) {
                     responseMessage.append((i + 1)).append(". ").append(riskReport.getRecommendations().get(i)).append("\n");
                 }
+            } else {
+                responseMessage.append("1. 保持常规监控和准备\n");
+                responseMessage.append("2. 关注天气和交通变化\n");
             }
 
-            responseMessage.append("\n【参考标准】\n");
+            responseMessage.append("\n【📋 执行标准】\n");
             responseMessage.append(riskReport.getSopReference()).append("\n");
+
+            // 添加免责声明
+            if (useNetworkSearch) {
+                responseMessage.append("\n💡 提示: 本报告基于实时网络数据分析，建议结合现场情况进行综合判断。");
+            } else {
+                responseMessage.append("\n💡 提示: 本报告基于历史数据分析，如需最新信息请咨询相关部门。");
+            }
 
             // 保存对话历史
             saveChatHistory(sessionId, request.getMessage(), responseMessage.toString(), false, null);

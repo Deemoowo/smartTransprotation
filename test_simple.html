@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>简单标题转换测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+        .test-result {
+            background: #1e293b;
+            border: 1px solid #334155;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        h1, h2, h3 { color: #06b6d4; }
+    </style>
+</head>
+<body>
+    <h1>简单标题转换测试</h1>
+    
+    <div class="test-result">
+        <h2>原始文本：</h2>
+        <div id="original"></div>
+    </div>
+    
+    <div class="test-result">
+        <h2>转换结果：</h2>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        // 简化的强制转换函数
+        function formatMessage(content) {
+            if (!content) return '';
+            let formatted = content;
+            
+            // 强制替换标题符号为中文数字格式
+            formatted = formatted.replace(/^######\s*(.*$)/gm, '<h6>六、$1</h6>');
+            formatted = formatted.replace(/^#####\s*(.*$)/gm, '<h5>五、$1</h5>');
+            formatted = formatted.replace(/^####\s*(.*$)/gm, '<h4>四、$1</h4>');
+            formatted = formatted.replace(/^###\s*(.*$)/gm, '<h3>三、$1</h3>');
+            formatted = formatted.replace(/^##\s*(.*$)/gm, '<h2>二、$1</h2>');
+            formatted = formatted.replace(/^#\s*(.*$)/gm, '<h1>一、$1</h1>');
+
+            // 强制替换任何剩余的标题符号（防止遗漏）
+            formatted = formatted.replace(/######\s*/g, '六、');
+            formatted = formatted.replace(/#####\s*/g, '五、');
+            formatted = formatted.replace(/####\s*/g, '四、');
+            formatted = formatted.replace(/###\s*/g, '三、');
+            formatted = formatted.replace(/##\s*/g, '二、');
+            formatted = formatted.replace(/#\s*/g, '一、');
+            
+            // 处理粗体
+            formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            
+            // 转换换行
+            formatted = formatted.replace(/\n/g, '<br>');
+            
+            return formatted;
+        }
+
+        // 测试文本
+        const testText = `我需要查询2024年2月纽约曼哈顿区的交通事故数据。让我调用交通数据查询工具来获取相关信息。
+
+# 2024年2月交通事故数据分析
+
+根据交通数据查询，2024年2月纽约市共发生6,841起交通事故。以下是详细分析：
+
+## 事故概况
+- 总事故数量: 6,841起
+- 数据覆盖: 包含曼哈顿、布鲁克林、皇后区等多个行政区
+
+## 事故类型分析
+1. 车辆类型：
+   - 轿车(Sedan)是最常见的涉事车型
+
+## 主要致因因素
+- 主要因素：驾驶员疏忽/分心、交通控制违规、超速行驶
+
+## 建议
+1. 加强对分心驾驶的监管
+2. 在事故高发路段增设安全警示标识`;
+
+        // 显示原始文本和转换结果
+        document.getElementById('original').innerHTML = testText.replace(/\n/g, '<br>');
+        
+        const result = formatMessage(testText);
+        document.getElementById('result').innerHTML = result;
+        
+        // 检查是否还有 # 符号
+        if (result.includes('#')) {
+            console.log('❌ 仍然包含 # 符号');
+            document.body.innerHTML += '<div style="color: red; font-weight: bold;">❌ 转换失败：仍然包含 # 符号</div>';
+        } else {
+            console.log('✅ 成功：不再包含 # 符号');
+            document.body.innerHTML += '<div style="color: green; font-weight: bold;">✅ 转换成功：不再包含 # 符号</div>';
+        }
+    </script>
+</body>
+</html>
